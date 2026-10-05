@@ -155,6 +155,14 @@ Under `plugin/includes/WP_Scatter_Everywhere/`:
 
 ## Notes
 
+- Status: implemented. The logic (settings, OAuth client, access token provider,
+  state store, connection service) is unit-tested with fake HTTP closures. The
+  WordPress glue (`YouTube/WordPressFactory`, `Admin/SettingsPage`) is not covered
+  by PHPUnit; it was only exercised with a minimal stub of the WordPress functions
+  it calls and has not been run against a real WordPress or Google.
+- The scope list and the OAuth endpoints come from memory of the Google
+  documentation and still have to be confirmed against a real authorisation.
+
 - For a Google Cloud project whose OAuth consent screen is in *Testing* status,
   Google may expire refresh tokens after a short period. The settings page
   explains this next to the *needs re-authorisation* state, and the README
