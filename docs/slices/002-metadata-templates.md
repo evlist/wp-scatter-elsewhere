@@ -136,9 +136,11 @@ the placeholder list shown below the fields. Stored in the option
 
 ## Notes
 
-- Status: the pure core (parser, renderer, normaliser, settings object, composer) is
-  implemented and unit-tested. The WordPress glue (`WP_Post` → `PostData` with
-  `wp_date()`, and the settings fields) waits for the settings page of slice 001.
+- Status: implemented. The pure core (parser, renderer, normaliser, settings object,
+  composer) is unit-tested. The WordPress glue (`Metadata/WordPressFactory`:
+  `WP_Post` → `PostData` with `wp_date()`, and the settings fields on the
+  *Scatter Everywhere* page) is not covered by PHPUnit; it was only exercised
+  with a minimal stub of the WordPress functions, not on a real WordPress.
 
 - The YouTube limits (100 characters for a title, 5000 bytes for a description,
   no angle brackets) are confirmed against the current API documentation when

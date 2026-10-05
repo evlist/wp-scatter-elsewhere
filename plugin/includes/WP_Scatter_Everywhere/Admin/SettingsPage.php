@@ -4,6 +4,8 @@
 
 namespace WP_Scatter_Everywhere\Admin;
 
+use InvalidArgumentException;
+use WP_Scatter_Everywhere\Metadata\WordPressFactory as MetadataFactory;
 use WP_Scatter_Everywhere\Settings\YouTubeSettings;
 use WP_Scatter_Everywhere\YouTube\OAuthException;
 use WP_Scatter_Everywhere\YouTube\WordPressFactory;
@@ -18,6 +20,7 @@ class SettingsPage {
 	private const ACTION_SAVE       = 'wp_scatter_everywhere_save_credentials';
 	private const ACTION_CONNECT    = 'wp_scatter_everywhere_youtube_connect';
 	private const ACTION_DISCONNECT = 'wp_scatter_everywhere_youtube_disconnect';
+	private const ACTION_TEMPLATES  = 'wp_scatter_everywhere_save_templates';
 
 	private const NOTICE_ARG       = 'wp_scatter_everywhere_notice';
 	private const ERROR_TRANSIENT  = 'wp_scatter_everywhere_error_';
@@ -27,6 +30,7 @@ class SettingsPage {
 		add_action( 'admin_post_' . self::ACTION_SAVE, [ $this, 'handleSave' ] );
 		add_action( 'admin_post_' . self::ACTION_CONNECT, [ $this, 'handleConnect' ] );
 		add_action( 'admin_post_' . self::ACTION_DISCONNECT, [ $this, 'handleDisconnect' ] );
+		add_action( 'admin_post_' . self::ACTION_TEMPLATES, [ $this, 'handleSaveTemplates' ] );
 		add_action( 'admin_post_' . WordPressFactory::CALLBACK_ACTION, [ $this, 'handleCallback' ] );
 	}
 
@@ -49,6 +53,23 @@ class SettingsPage {
 		WordPressFactory::settings()->saveCredentials( $clientId, $clientSecret );
 
 		$this->redirect( 'saved' );
+	}
+
+	public function handleSaveTemplates(): void {
+		$this->guard( self::ACTION_TEMPLATES );
+
+		$templates = [
+			'title'       => isset( $_POST['title_template'] ) ? sanitize_text_field( wp_unslash( $_POST['title_template'] ) ) : '',
+			'description' => isset( $_POST['description_template'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description_template'] ) ) : '',
+		];
+
+		try {
+			MetadataFactory::templateSettings()->save( $templates );
+		} catch ( InvalidArgumentException $e ) {
+			$this->redirectWithError( $e->getMessage() );
+		}
+
+		$this->redirect( 'templates_saved' );
 	}
 
 	public function handleConnect(): void {
@@ -157,7 +178,52 @@ class SettingsPage {
 					<?php submit_button( __( 'Disconnect', 'wp-scatter-everywhere' ), 'secondary', 'submit', false ); ?>
 				</form>
 			<?php endif; ?>
+
+			<?php $this->renderTemplates(); ?>
 		</div>
+		<?php
+	}
+
+	private function renderTemplates(): void {
+		$templates = MetadataFactory::templateSettings();
+		?>
+		<h3><?php echo esc_html__( 'Video title and description', 'wp-scatter-everywhere' ); ?></h3>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_TEMPLATES ); ?>" />
+			<?php wp_nonce_field( self::ACTION_TEMPLATES ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="wpse-title-template"><?php echo esc_html__( 'Title template', 'wp-scatter-everywhere' ); ?></label></th>
+					<td><input type="text" id="wpse-title-template" name="title_template" class="large-text code" value="<?php echo esc_attr( $templates->getTitleTemplate() ); ?>" /></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-description-template"><?php echo esc_html__( 'Description template', 'wp-scatter-everywhere' ); ?></label></th>
+					<td><textarea id="wpse-description-template" name="description_template" class="large-text code" rows="5"><?php echo esc_textarea( $templates->getDescriptionTemplate() ); ?></textarea></td>
+				</tr>
+			</table>
+			<p class="description"><?php echo esc_html__( 'Available placeholders:', 'wp-scatter-everywhere' ); ?></p>
+			<ul class="description" style="list-style:disc;margin-left:2em">
+				<li><code>{title}</code> — <?php echo esc_html__( 'post title', 'wp-scatter-everywhere' ); ?></li>
+				<li><code>{excerpt}</code> — <?php echo esc_html__( 'post excerpt', 'wp-scatter-everywhere' ); ?></li>
+				<li><code>{permalink}</code> — <?php echo esc_html__( 'post address', 'wp-scatter-everywhere' ); ?></li>
+				<li><code>{date}</code>, <code>{date:j F Y}</code> — <?php echo esc_html__( 'post date, with an optional PHP date format', 'wp-scatter-everywhere' ); ?></li>
+				<li><code>{author}</code> — <?php echo esc_html__( 'author name', 'wp-scatter-everywhere' ); ?></li>
+				<li><code>{categories}</code>, <code>{tags}</code>, <code>{terms:taxonomy}</code> — <?php echo esc_html__( 'terms of the post, separated by commas', 'wp-scatter-everywhere' ); ?></li>
+				<li>
+					<?php
+					echo esc_html(
+						sprintf(
+							/* translators: 1: "{{", 2: "}}". */
+							__( '%1$s and %2$s write literal braces', 'wp-scatter-everywhere' ),
+							'{{',
+							'}}'
+						)
+					);
+					?>
+				</li>
+			</ul>
+			<?php submit_button( __( 'Save templates', 'wp-scatter-everywhere' ) ); ?>
+		</form>
 		<?php
 	}
 
@@ -192,6 +258,7 @@ class SettingsPage {
 			'saved'        => __( 'Credentials saved.', 'wp-scatter-everywhere' ),
 			'connected'    => __( 'Connected to YouTube.', 'wp-scatter-everywhere' ),
 			'disconnected' => __( 'Disconnected from YouTube.', 'wp-scatter-everywhere' ),
+			'templates_saved' => __( 'Templates saved.', 'wp-scatter-everywhere' ),
 		];
 
 		if ( isset( $messages[ $code ] ) ) {
