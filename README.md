@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Eric van der Vlist <vdv@dyomedea.com> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# WP Scatter Everywhere
+# WP Scatter Elsewhere
 
 A WordPress plugin that disperses the content and media published on a blog to
 other places on the web.
@@ -15,7 +15,7 @@ subtitles automatically. See the
 
 ## Configuration
 
-Settings are on the **Settings → Scatter Everywhere** page (administrators
+Settings are on the **Settings → Scatter Elsewhere** page (administrators
 only).
 
 1. In the [Google Cloud console](https://console.cloud.google.com/), create a

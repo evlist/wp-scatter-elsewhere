@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Metadata\MetadataComposer;
-use WP_Scatter_Everywhere\Metadata\PostData;
-use WP_Scatter_Everywhere\Metadata\TemplateParser;
-use WP_Scatter_Everywhere\Metadata\TemplateRenderer;
-use WP_Scatter_Everywhere\Metadata\YouTubeTextNormalizer;
-use WP_Scatter_Everywhere\Settings\MetadataTemplateSettings;
+use WP_Scatter_Elsewhere\Metadata\MetadataComposer;
+use WP_Scatter_Elsewhere\Metadata\PostData;
+use WP_Scatter_Elsewhere\Metadata\TemplateParser;
+use WP_Scatter_Elsewhere\Metadata\TemplateRenderer;
+use WP_Scatter_Elsewhere\Metadata\YouTubeTextNormalizer;
+use WP_Scatter_Elsewhere\Settings\MetadataTemplateSettings;
 
 class MetadataComposerTest extends TestCase {
 

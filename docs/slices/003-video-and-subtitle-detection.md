@@ -120,7 +120,7 @@ DetectedVideo {
 
 ### 6. Code structure
 
-Under `plugin/includes/WP_Scatter_Everywhere/Detection/`: `VideoDetector`,
+Under `plugin/includes/WP_Scatter_Elsewhere/Detection/`: `VideoDetector`,
 `RenderedPageDetector`, `PageFetcher`, `PageParser`, `LocalFileResolver`,
 `DetectedVideo`, `LocalFile`, `SubtitleTrack`, and the typed exceptions.
 `RenderedPageDetector` only composes the others, and the closures are wired in
@@ -162,7 +162,7 @@ Under `plugin/includes/WP_Scatter_Everywhere/Detection/`: `VideoDetector`,
   blog page (`tests/fixtures/grenoble-salers.html`). `WordPressDetectorFactory`
   wires the closures to WordPress and is the only part not covered by tests.
   The loopback request has no TLS relaxation by default; the
-  `wp_scatter_everywhere_loopback_sslverify` filter exists for local environments.
+  `wp_scatter_elsewhere_loopback_sslverify` filter exists for local environments.
 - Other detection strategies, not implemented for now, that fit behind
   `VideoDetector`:
 

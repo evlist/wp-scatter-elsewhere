@@ -3,7 +3,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <phpunit bootstrap="tests/phpunit/bootstrap.php" colors="true" cacheResult="false">
   <testsuites>
-    <testsuite name="WP Scatter Everywhere Unit Tests">
+    <testsuite name="WP Scatter Elsewhere Unit Tests">
       <directory suffix="Test.php">tests/phpunit</directory>
     </testsuite>
   </testsuites>

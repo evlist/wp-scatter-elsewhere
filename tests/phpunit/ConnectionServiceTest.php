@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Settings\YouTubeSettings;
-use WP_Scatter_Everywhere\YouTube\ChannelClient;
-use WP_Scatter_Everywhere\YouTube\ConnectionService;
-use WP_Scatter_Everywhere\YouTube\OAuthClient;
-use WP_Scatter_Everywhere\YouTube\OAuthException;
-use WP_Scatter_Everywhere\YouTube\OAuthStateStore;
+use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
+use WP_Scatter_Elsewhere\YouTube\ChannelClient;
+use WP_Scatter_Elsewhere\YouTube\ConnectionService;
+use WP_Scatter_Elsewhere\YouTube\OAuthClient;
+use WP_Scatter_Elsewhere\YouTube\OAuthException;
+use WP_Scatter_Elsewhere\YouTube\OAuthStateStore;
 
 class ConnectionServiceTest extends TestCase {
 

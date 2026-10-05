@@ -42,13 +42,13 @@ without any command line or token file.
 
 ### 1. Settings page
 
-A **Scatter Everywhere** page under *Settings*, restricted to `manage_options`
+A **Scatter Elsewhere** page under *Settings*, restricted to `manage_options`
 (same trusted-admin model as wp-media-helper, see
 [constraints](../IA/constraints.md)). It has a *YouTube* section with:
 
 - **Client ID** and **Client secret** fields.
 - A read-only **Redirect URI** to copy into the Google Cloud console
-  (`admin-post.php?action=wp_scatter_everywhere_youtube_callback`, built with
+  (`admin-post.php?action=wp_scatter_elsewhere_youtube_callback`, built with
   `admin_url()`).
 - A **Connect** button, enabled once both credentials are saved.
 - The connection state: *not connected*, *connected* (channel title and
@@ -97,7 +97,7 @@ secret are kept.
 
 ### 5. Persistence
 
-A single option `wp_scatter_everywhere_youtube`:
+A single option `wp_scatter_elsewhere_youtube`:
 
 ```php
 [
@@ -118,7 +118,7 @@ defined in `wp-config.php` is a possible later feature, not part of this slice.
 
 ### 6. Code structure
 
-Under `plugin/includes/WP_Scatter_Everywhere/`:
+Under `plugin/includes/WP_Scatter_Elsewhere/`:
 
 - `Settings/YouTubeSettings.php`: load/save/normalise the option, with loader and
   saver closures like `ExternalSourceSettings`.
@@ -149,7 +149,7 @@ Under `plugin/includes/WP_Scatter_Everywhere/`:
    then refreshes it; `invalid_grant` yields *needs re-authorisation*.
 5. **Disconnect** removes tokens locally even if revocation fails.
 6. Users without `manage_options` cannot reach the page or the callback.
-7. All user-facing strings use the `wp-scatter-everywhere` text domain.
+7. All user-facing strings use the `wp-scatter-elsewhere` text domain.
 8. Unit tests cover URL building, code exchange, refresh, expiry and error
    handling using fake HTTP closures.
 

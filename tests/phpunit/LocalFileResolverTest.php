@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Detection\LocalFile;
-use WP_Scatter_Everywhere\Detection\LocalFileResolver;
+use WP_Scatter_Elsewhere\Detection\LocalFile;
+use WP_Scatter_Elsewhere\Detection\LocalFileResolver;
 
 class LocalFileResolverTest extends TestCase {
 

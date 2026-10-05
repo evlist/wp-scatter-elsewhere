@@ -15,8 +15,8 @@ if ( ! function_exists( 'esc_html__' ) ) {
 }
 
 spl_autoload_register( function ( string $class ): void {
-	$prefix = 'WP_Scatter_Everywhere\\';
-	$base   = __DIR__ . '/../../plugin/includes/WP_Scatter_Everywhere/';
+	$prefix = 'WP_Scatter_Elsewhere\\';
+	$base   = __DIR__ . '/../../plugin/includes/WP_Scatter_Elsewhere/';
 
 	if ( strncmp( $prefix, $class, strlen( $prefix ) ) !== 0 ) {
 		return;

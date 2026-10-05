@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Detection\LocalFileResolver;
-use WP_Scatter_Everywhere\Detection\PageFetcher;
-use WP_Scatter_Everywhere\Detection\PageParser;
-use WP_Scatter_Everywhere\Detection\RenderedPageDetector;
-use WP_Scatter_Everywhere\Detection\UrlResolver;
+use WP_Scatter_Elsewhere\Detection\LocalFileResolver;
+use WP_Scatter_Elsewhere\Detection\PageFetcher;
+use WP_Scatter_Elsewhere\Detection\PageParser;
+use WP_Scatter_Elsewhere\Detection\RenderedPageDetector;
+use WP_Scatter_Elsewhere\Detection\UrlResolver;
 
 class RenderedPageDetectorTest extends TestCase {
 

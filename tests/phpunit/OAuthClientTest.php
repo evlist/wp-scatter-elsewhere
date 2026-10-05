@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\YouTube\OAuthClient;
-use WP_Scatter_Everywhere\YouTube\OAuthException;
+use WP_Scatter_Elsewhere\YouTube\OAuthClient;
+use WP_Scatter_Elsewhere\YouTube\OAuthException;
 
 class OAuthClientTest extends TestCase {
 

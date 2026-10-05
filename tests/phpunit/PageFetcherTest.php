@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Detection\PageFetchException;
-use WP_Scatter_Everywhere\Detection\PageFetcher;
-use WP_Scatter_Everywhere\Detection\PostNotEligibleException;
+use WP_Scatter_Elsewhere\Detection\PageFetchException;
+use WP_Scatter_Elsewhere\Detection\PageFetcher;
+use WP_Scatter_Elsewhere\Detection\PostNotEligibleException;
 
 class PageFetcherTest extends TestCase {
 

@@ -13,7 +13,7 @@
 - Every user-facing string must be translatable. No literal user-facing text may
   reach the browser untranslated.
 - PHP strings must use the WordPress translation functions with the
-  `wp-scatter-everywhere` text domain, combined with the matching escaping
+  `wp-scatter-elsewhere` text domain, combined with the matching escaping
   function (`esc_html__()`, `esc_attr__()`, and so on) rather than escaping a
   translated value separately.
 - JavaScript strings must be translated with the `@wordpress/i18n` package and
@@ -31,7 +31,7 @@
   integration exists.
 - Use WordPress APIs rather than direct SQL queries against WordPress tables.
 - Runtime code should stay under the PSR-4 structure rooted at
-  `plugin/includes/WP_Scatter_Everywhere/`.
+  `plugin/includes/WP_Scatter_Elsewhere/`.
 - Configuration should live in the plugin settings page rather than in ad hoc
   runtime constants or shell-dependent setup.
 

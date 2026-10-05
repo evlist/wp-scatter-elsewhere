@@ -91,7 +91,7 @@ Both are used when the corresponding setting is empty.
 Two text fields (a single-line title template, a multi-line description
 template) in the *YouTube* section of the settings page from slice 001, with
 the placeholder list shown below the fields. Stored in the option
-`wp_scatter_everywhere_youtube_templates`:
+`wp_scatter_elsewhere_youtube_templates`:
 
 ```php
 [
@@ -139,7 +139,7 @@ the placeholder list shown below the fields. Stored in the option
 - Status: implemented. The pure core (parser, renderer, normaliser, settings object,
   composer) is unit-tested. The WordPress glue (`Metadata/WordPressFactory`:
   `WP_Post` → `PostData` with `wp_date()`, and the settings fields on the
-  *Scatter Everywhere* page) is not covered by PHPUnit; it was only exercised
+  *Scatter Elsewhere* page) is not covered by PHPUnit; it was only exercised
   with a minimal stub of the WordPress functions, not on a real WordPress.
 
 - The YouTube limits (100 characters for a title, 5000 bytes for a description,

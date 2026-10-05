@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\YouTube\OAuthStateStore;
+use WP_Scatter_Elsewhere\YouTube\OAuthStateStore;
 
 class OAuthStateStoreTest extends TestCase {
 

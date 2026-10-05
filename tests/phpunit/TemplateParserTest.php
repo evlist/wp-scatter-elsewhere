@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Metadata\Placeholder;
-use WP_Scatter_Everywhere\Metadata\TemplateParser;
+use WP_Scatter_Elsewhere\Metadata\Placeholder;
+use WP_Scatter_Elsewhere\Metadata\TemplateParser;
 
 class TemplateParserTest extends TestCase {
 

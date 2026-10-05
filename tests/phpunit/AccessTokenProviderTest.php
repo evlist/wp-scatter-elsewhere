@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use PHPUnit\Framework\TestCase;
-use WP_Scatter_Everywhere\Settings\YouTubeSettings;
-use WP_Scatter_Everywhere\YouTube\AccessTokenProvider;
-use WP_Scatter_Everywhere\YouTube\NotConnectedException;
-use WP_Scatter_Everywhere\YouTube\OAuthClient;
-use WP_Scatter_Everywhere\YouTube\OAuthException;
-use WP_Scatter_Everywhere\YouTube\ReauthorizationRequiredException;
+use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
+use WP_Scatter_Elsewhere\YouTube\AccessTokenProvider;
+use WP_Scatter_Elsewhere\YouTube\NotConnectedException;
+use WP_Scatter_Elsewhere\YouTube\OAuthClient;
+use WP_Scatter_Elsewhere\YouTube\OAuthException;
+use WP_Scatter_Elsewhere\YouTube\ReauthorizationRequiredException;
 
 class AccessTokenProviderTest extends TestCase {
 

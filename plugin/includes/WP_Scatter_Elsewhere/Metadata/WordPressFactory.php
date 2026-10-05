@@ -1,0 +1,67 @@
+<?php
+// SPDX-FileCopyrightText: 2026 Eric van der Vlist <vdv@dyomedea.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+namespace WP_Scatter_Elsewhere\Metadata;
+
+use DateTimeImmutable;
+use WP_Post;
+use WP_Scatter_Elsewhere\Settings\MetadataTemplateSettings;
+
+/**
+ * Wires the metadata classes to WordPress. Contains no logic worth testing without WordPress.
+ */
+final class WordPressFactory {
+
+	public static function templateSettings(): MetadataTemplateSettings {
+		return new MetadataTemplateSettings(
+			static fn(): mixed => get_option( MetadataTemplateSettings::optionKey(), false ),
+			static function ( array $value ): void {
+				update_option( MetadataTemplateSettings::optionKey(), $value, false );
+			},
+			new TemplateParser()
+		);
+	}
+
+	public static function composer(): MetadataComposer {
+		$parser = new TemplateParser();
+
+		return new MetadataComposer(
+			self::templateSettings(),
+			new TemplateRenderer(
+				$parser,
+				static function ( DateTimeImmutable $date, ?string $format ): string {
+					$format = null === $format ? (string) get_option( 'date_format' ) : $format;
+
+					return (string) wp_date( $format, $date->getTimestamp() );
+				}
+			),
+			new YouTubeTextNormalizer()
+		);
+	}
+
+	/**
+	 * Builds the template data of a post. The date is the post date, which is the event date for
+	 * back-dated posts.
+	 */
+	public static function postData( WP_Post $post ): PostData {
+		$date = get_post_datetime( $post );
+
+		$terms = [];
+		foreach ( get_object_taxonomies( $post->post_type ) as $taxonomy ) {
+			$list = get_the_terms( $post, $taxonomy );
+			if ( is_array( $list ) ) {
+				$terms[ $taxonomy ] = array_map( static fn( $term ): string => $term->name, $list );
+			}
+		}
+
+		return new PostData(
+			get_the_title( $post ),
+			get_the_excerpt( $post ),
+			(string) get_permalink( $post ),
+			$date instanceof DateTimeImmutable ? $date : new DateTimeImmutable( '@' . (int) get_post_time( 'U', true, $post ) ),
+			(string) get_the_author_meta( 'display_name', (int) $post->post_author ),
+			$terms
+		);
+	}
+}
