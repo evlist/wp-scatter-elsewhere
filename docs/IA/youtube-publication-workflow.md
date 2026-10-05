@@ -65,18 +65,21 @@ or YouTube Studio:
   video to a given playlist, or add a keyword. A term absent from the table is
   ignored. The same mechanism serves both actions, so new actions can be added
   later.
-- **Finding videos and subtitles:** by reading the video elements of the post,
-  not by a naming convention on attachments. `<video>` / `<source>` give the
-  files, `<track kind="subtitles" srclang="…">` gives each subtitle file and
-  its language. Each `src` is mapped back to a media-library attachment (or an
-  uploads file). The mapping is isolated behind a small interface so other
-  detection strategies (such as the `foo-fr.vtt` suffix convention) can be
-  added without touching the rest. See *Video detection* below.
+- **Finding videos and subtitles:** by reading the video elements of the
+  rendered public page of the post, not by a naming convention on attachments.
+  `<video>` / `<source>` give the files, `<track kind="subtitles"
+  srclang="…">` gives each subtitle file and its language. Each `src` is mapped
+  back to a media-library attachment (or an uploads file). The detection sits
+  behind a small interface so other strategies (such as the `foo-fr.vtt` suffix
+  convention, or parsing the stored content) can be added without touching the
+  rest. See *Video detection* below.
 - **Language:** the site language by default.
-- **Trigger:** the user is asked at publication time (pre-publish panel in the
-  block editor), and a button in the editor lets them publish to YouTube
-  afterwards. When the post holds several videos, the user chooses which one
-  (one video per run).
+- **Trigger:** the post must be published first: the description contains the
+  post permalink and the page must be publicly reachable to detect the videos.
+  The user is therefore asked *after* publication (post-publish panel of the
+  block editor), and a button in the editor sidebar lets them publish to
+  YouTube later if they declined or postponed. When the page holds several
+  videos, the user chooses which one (one video per run).
 - **Choices at publication:** the video, the privacy status (`public` by
   default) and the license (default from the settings).
 - **Scheduling:** not used. Posts about a past event are back-dated, so the post
@@ -92,22 +95,20 @@ or YouTube Studio:
 
 ## Video detection
 
-Reading "the video elements of the page" has a catch: the author's theme adds
-the videos and subtitle tracks at display time from attachments, so they exist
-in the final page but not in `the_content`. Options:
+The theme adds videos and subtitle tracks at display time from attachments, so
+they exist in the final page but not in the stored post content. Since YouTube
+publication happens after the post is published, the plugin fetches the
+rendered public page of the post (server-side loopback request) and parses the
+`<video>`, `<source>` and `<track>` elements.
 
-1. Parse the post content as the editor stores it (video blocks, shortcodes,
-   `<video>` HTML). Works before publication; sees only what the author put in
-   the content.
-2. Fetch the rendered public page and parse it. Sees what visitors see,
-   including theme-generated markup, but only works once the post is published
-   (drafts are not reachable without authentication) and needs a loopback HTTP
-   request.
+Consequences to handle explicitly:
 
-Proposal: implement both behind the detection interface, with the content
-parser as the default and the rendered page as an option, since the
-pre-publish question is asked before the post is public. Tell me if the
-rendered page should be the primary source.
+- the fetch can fail (loopback blocked, authentication in front of the site,
+  caching): the error is reported and the user can retry;
+- password-protected, private and non-public posts are not reachable and are
+  not eligible, which also matches the intent of publishing publicly;
+- a `src` that does not map to a local file (external video) is listed but not
+  uploadable.
 
 ## Design directions
 
@@ -131,10 +132,8 @@ rendered page should be the primary source.
 
 ## Open questions
 
-1. **Detection source:** content parser first and rendered page as an option
-   (proposal above), or the reverse?
-2. **Subtitle format:** WebVTT is what the blog serves. The plugin will check
+1. **Subtitle format:** WebVTT is what the blog serves. The plugin will check
    whether `captions.insert` accepts it directly; if not, it converts.
-3. **Ordinal dates:** the script writes "1er juin". WordPress date formats give
-   "1 juin" with `j F Y`. Is a locale-aware ordinal placeholder needed, or is
-   "1 juin" acceptable?
+2. **Ordinal dates (low priority):** a locale-aware ordinal placeholder (such as
+   "1er" in French) is wanted, after the core flow. Its design is left open
+   (a `{date:…}` format extension or a dedicated placeholder).
