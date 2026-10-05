@@ -1,0 +1,298 @@
+<?php
+// SPDX-FileCopyrightText: 2026 Eric van der Vlist <vdv@dyomedea.com>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+use PHPUnit\Framework\TestCase;
+use WP_Scatter_Elsewhere\Detection\DetectedVideo;
+use WP_Scatter_Elsewhere\Detection\LocalFile;
+use WP_Scatter_Elsewhere\Settings\UploadSettings;
+use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
+use WP_Scatter_Elsewhere\YouTube\AccessTokenProvider;
+use WP_Scatter_Elsewhere\YouTube\OAuthClient;
+use WP_Scatter_Elsewhere\YouTube\Upload\ResumableUploader;
+use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
+use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
+use WP_Scatter_Elsewhere\YouTube\Upload\UploadJobStore;
+use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
+
+class UploadServiceTest extends TestCase {
+
+	private const CONTENT = 'abcdefghijklmnopqrstuvwxy';
+
+	/** @var array<string, array<string, mixed>> */
+	private array $stored = [];
+
+	/** @var array<int, array{int, string}> */
+	private array $scheduled = [];
+
+
+	private int $ids = 0;
+
+	private FakeUploadServer $server;
+
+	/** @var array<string, mixed> */
+	private array $settingsValue = [];
+
+	protected function setUp(): void {
+		$this->server = new FakeUploadServer( strlen( self::CONTENT ) );
+	}
+
+	private function service( int $chunk = 10 ): UploadService {
+		$server = $this->server;
+		$oauth  = new OAuthClient( 'id', 'secret', 'https://example.org/cb', static fn(): array => [ 'status' => 200, 'body' => [ 'access_token' => 'tok', 'expires_in' => 3600 ] ] );
+		$tokens = new AccessTokenProvider(
+			new YouTubeSettings( static fn(): array => [ 'refresh_token' => 'r', 'status' => 'connected' ], static function ( array $v ): void {} ),
+			$oauth,
+			static fn(): ?array => null,
+			static function ( array $v, int $ttl ): void {},
+			static function (): void {},
+			static fn(): int => 0
+		);
+
+		return new UploadService(
+			new UploadJobStore(
+				fn(): mixed => $this->stored,
+				function ( array $value ): void {
+					$this->stored = $value;
+				}
+			),
+			new ResumableUploader(
+				fn( string $m, string $u, array $h, string $b ): array => $server->handle( $m, $u, $h, $b ),
+				$tokens,
+				static fn( string $p, int $o, int $l ): string => substr( self::CONTENT, $o, $l ),
+				fn(): int => $this->server->now,
+				$chunk
+			),
+			new UploadSettings(
+				fn(): mixed => $this->settingsValue,
+				static function ( array $v ): void {}
+			),
+			function ( int $when, string $id ): void {
+				$this->scheduled[] = [ $when, $id ];
+			},
+			fn(): int => $this->server->now,
+			fn(): string => 'job' . ++$this->ids
+		);
+	}
+
+	private function video( string $id = 'v1', ?LocalFile $file = null, ?string $reason = null ): DetectedVideo {
+		$file ??= new LocalFile( '/uploads/a.mp4', 'https://example.org/uploads/a.mp4', 'video/mp4', strlen( self::CONTENT ), 12 );
+
+		return new DetectedVideo( $id, $file, $reason, [ 'https://example.org/uploads/a.mp4' ], [], null );
+	}
+
+	public function test_enqueue_creates_a_private_job_and_schedules_it(): void {
+		$job = $this->service()->enqueue( $this->video(), 7, 'Title', 'Description' );
+
+		$this->assertSame( 'job1', $job->id() );
+		$this->assertSame( UploadJob::STATUS_QUEUED, $job->status() );
+		$this->assertSame( 'private', $job->privacy() );
+		$this->assertSame( 7, $job->postId() );
+		$this->assertSame( 'v1', $job->videoId() );
+		$this->assertSame( '/uploads/a.mp4', $job->filePath() );
+		$this->assertSame( 'video/mp4', $job->mimeType() );
+		$this->assertSame( 25, $job->size() );
+		$this->assertSame( [ [ 1000, 'job1' ] ], $this->scheduled );
+		$this->assertSame( $job->toArray(), $this->service()->job( 'job1' )->toArray() );
+	}
+
+	public function test_enqueue_uses_the_default_privacy_of_the_settings_or_the_explicit_one(): void {
+		$this->settingsValue = [ 'default_privacy' => 'unlisted' ];
+
+		$this->assertSame( 'unlisted', $this->service()->enqueue( $this->video( 'a' ), 1, 'T', 'D' )->privacy() );
+		$this->assertSame( 'public', $this->service()->enqueue( $this->video( 'b' ), 1, 'T', 'D', 'public' )->privacy() );
+	}
+
+	public function test_enqueue_refuses_invalid_requests(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+
+		$cases = [
+			'privacy'     => fn() => $service->enqueue( $this->video( 'x' ), 7, 'T', 'D', 'everyone' ),
+			'not uploadable' => fn() => $service->enqueue( new DetectedVideo( 'x', null, 'external', [], [], null ), 7, 'T', 'D' ),
+			'empty file'  => fn() => $service->enqueue( $this->video( 'x', new LocalFile( '/a', 'u', 'video/mp4', 0, null ) ), 7, 'T', 'D' ),
+			'duplicate'   => fn() => $service->enqueue( $this->video(), 7, 'T', 'D' ),
+		];
+
+		foreach ( $cases as $name => $call ) {
+			try {
+				$call();
+				$this->fail( 'Expected an UploadException for ' . $name );
+			} catch ( UploadException $e ) {
+				$this->assertNotSame( '', $e->getMessage(), $name );
+			}
+		}
+
+		$this->assertCount( 1, $service->jobs() );
+	}
+
+	public function test_a_finished_job_does_not_block_a_new_one(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+
+		$this->assertSame( 'job2', $service->enqueue( $this->video(), 7, 'T', 'D' )->id() );
+	}
+
+	public function test_process_uploads_and_does_not_reschedule_a_finished_job(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$this->scheduled = [];
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertSame( 'vid123', $job->youtubeId() );
+		$this->assertSame( 0, $job->lockedUntil() );
+		$this->assertSame( [], $this->scheduled );
+		$this->assertSame( UploadJob::STATUS_DONE, $service->job( 'job1' )->status() );
+	}
+
+	public function test_process_reschedules_an_unfinished_job_immediately(): void {
+		$this->server->putDelay = 10;
+		$service                = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$this->scheduled = [];
+
+		$job = $service->process( 'job1', 15 );
+
+		$this->assertSame( UploadJob::STATUS_UPLOADING, $job->status() );
+		$this->assertSame( [ [ $this->server->now, 'job1' ] ], $this->scheduled );
+	}
+
+	public function test_process_reschedules_a_job_in_retry_at_its_retry_time(): void {
+		$this->server->script = [ null, [ 'status' => 503, 'headers' => [], 'body' => '' ] ];
+		$service              = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$this->scheduled = [];
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_RETRY, $job->status() );
+		$this->assertSame( [ [ 1030, 'job1' ] ], $this->scheduled );
+	}
+
+	public function test_process_postpones_a_retry_whose_delay_has_not_elapsed(): void {
+		$this->server->script = [ null, [ 'status' => 503, 'headers' => [], 'body' => '' ] ];
+		$service              = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+		$this->scheduled = [];
+		$this->server->requests = [];
+		$this->server->now = 1010;
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_RETRY, $job->status() );
+		$this->assertSame( [], $this->server->requests );
+		$this->assertSame( [ [ 1030, 'job1' ] ], $this->scheduled );
+
+		$this->server->now = 1030;
+		$this->assertSame( UploadJob::STATUS_DONE, $service->process( 'job1', 600 )->status() );
+	}
+
+	public function test_a_locked_job_is_not_run_twice(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$this->stored['job1']['locked_until'] = $this->server->now + 100;
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_QUEUED, $job->status() );
+		$this->assertSame( [], $this->server->requests );
+
+		$this->server->now = 1101;
+		$this->assertSame( UploadJob::STATUS_DONE, $service->process( 'job1', 600 )->status() );
+	}
+
+	public function test_the_job_is_locked_during_the_run(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$seen = null;
+		$this->server->script = [ function () use ( &$seen ): array {
+			$seen = $this->stored['job1']['locked_until'];
+
+			return [ 'status' => 200, 'headers' => [ 'location' => 'https://upload.example/session1' ], 'body' => '' ];
+		} ];
+
+		$service->process( 'job1', 600 );
+
+		$this->assertSame( 1000 + 600 + 300, $seen );
+	}
+
+	public function test_process_ignores_unknown_and_finished_jobs(): void {
+		$service = $this->service();
+
+		$this->assertNull( $service->process( 'nope', 600 ) );
+
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+		$this->server->requests = [];
+
+		$this->assertSame( UploadJob::STATUS_DONE, $service->process( 'job1', 600 )->status() );
+		$this->assertSame( [], $this->server->requests );
+	}
+
+	public function test_an_unexpected_exception_puts_the_job_in_retry(): void {
+		$this->server->script = [ static function (): array {
+			throw new LogicException( 'bug' );
+		} ];
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_RETRY, $job->status() );
+		$this->assertSame( 'bug', $job->error() );
+		$this->assertSame( 0, $job->lockedUntil() );
+	}
+
+	public function test_retry_restarts_a_failed_job_with_a_fresh_counter(): void {
+		$this->server->script = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
+		$service              = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$failed = $service->process( 'job1', 600 );
+		$this->assertSame( UploadJob::STATUS_FAILED, $failed->status() );
+		$this->scheduled = [];
+
+		$job = $service->retry( 'job1' );
+
+		$this->assertSame( UploadJob::STATUS_QUEUED, $job->status() );
+		$this->assertSame( 0, $job->attempts() );
+		$this->assertNull( $job->error() );
+		$this->assertSame( [ [ 1000, 'job1' ] ], $this->scheduled );
+		$this->assertSame( UploadJob::STATUS_DONE, $service->process( 'job1', 600 )->status() );
+	}
+
+	public function test_retry_of_a_job_with_a_session_resumes_after_asking_youtube(): void {
+		$this->server->script = [ null, [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
+		$service              = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+		$this->stored['job1']['session_uri'] = 'https://upload.example/session1';
+		$this->server->requests              = [];
+
+		$job = $service->retry( 'job1' );
+
+		$this->assertSame( UploadJob::STATUS_RETRY, $job->status() );
+		$service->process( 'job1', 600 );
+		$this->assertSame( 'bytes */25', $this->server->requests[0]['headers']['Content-Range'] );
+	}
+
+	public function test_retry_refuses_unknown_and_done_jobs(): void {
+		$service = $this->service();
+
+		try {
+			$service->retry( 'nope' );
+			$this->fail( 'Expected an UploadException.' );
+		} catch ( UploadException $e ) {
+			$this->assertNotSame( '', $e->getMessage() );
+		}
+
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+
+		$this->expectException( UploadException::class );
+		$service->retry( 'job1' );
+	}
+}

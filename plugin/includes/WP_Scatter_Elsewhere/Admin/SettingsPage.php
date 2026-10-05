@@ -6,6 +6,7 @@ namespace WP_Scatter_Elsewhere\Admin;
 
 use InvalidArgumentException;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\YouTube\OAuthException;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
@@ -21,6 +22,7 @@ class SettingsPage {
 	private const ACTION_CONNECT    = 'wp_scatter_elsewhere_youtube_connect';
 	private const ACTION_DISCONNECT = 'wp_scatter_elsewhere_youtube_disconnect';
 	private const ACTION_TEMPLATES  = 'wp_scatter_elsewhere_save_templates';
+	private const ACTION_UPLOAD     = 'wp_scatter_elsewhere_save_upload_settings';
 
 	private const NOTICE_ARG       = 'wp_scatter_elsewhere_notice';
 	private const ERROR_TRANSIENT  = 'wp_scatter_elsewhere_error_';
@@ -31,6 +33,7 @@ class SettingsPage {
 		add_action( 'admin_post_' . self::ACTION_CONNECT, [ $this, 'handleConnect' ] );
 		add_action( 'admin_post_' . self::ACTION_DISCONNECT, [ $this, 'handleDisconnect' ] );
 		add_action( 'admin_post_' . self::ACTION_TEMPLATES, [ $this, 'handleSaveTemplates' ] );
+		add_action( 'admin_post_' . self::ACTION_UPLOAD, [ $this, 'handleSaveUploadSettings' ] );
 		add_action( 'admin_post_' . WordPressFactory::CALLBACK_ACTION, [ $this, 'handleCallback' ] );
 	}
 
@@ -70,6 +73,20 @@ class SettingsPage {
 		}
 
 		$this->redirect( 'templates_saved' );
+	}
+
+	public function handleSaveUploadSettings(): void {
+		$this->guard( self::ACTION_UPLOAD );
+
+		$privacy = isset( $_POST['default_privacy'] ) ? sanitize_key( wp_unslash( $_POST['default_privacy'] ) ) : '';
+
+		try {
+			WordPressFactory::uploadSettings()->saveDefaultPrivacy( $privacy );
+		} catch ( InvalidArgumentException $e ) {
+			$this->redirectWithError( $e->getMessage() );
+		}
+
+		$this->redirect( 'upload_saved' );
 	}
 
 	public function handleConnect(): void {
@@ -180,6 +197,8 @@ class SettingsPage {
 			<?php endif; ?>
 
 			<?php $this->renderTemplates(); ?>
+
+			<?php $this->renderUploadSettings(); ?>
 		</div>
 		<?php
 	}
@@ -227,6 +246,36 @@ class SettingsPage {
 		<?php
 	}
 
+	private function renderUploadSettings(): void {
+		$current = WordPressFactory::uploadSettings()->defaultPrivacy();
+		$labels  = [
+			UploadSettings::PRIVACY_PRIVATE  => __( 'Private (only you can see it)', 'wp-scatter-elsewhere' ),
+			UploadSettings::PRIVACY_UNLISTED => __( 'Unlisted (anyone with the link)', 'wp-scatter-elsewhere' ),
+			UploadSettings::PRIVACY_PUBLIC   => __( 'Public', 'wp-scatter-elsewhere' ),
+		];
+		?>
+		<h3><?php echo esc_html__( 'Uploads', 'wp-scatter-elsewhere' ); ?></h3>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_UPLOAD ); ?>" />
+			<?php wp_nonce_field( self::ACTION_UPLOAD ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="wpse-default-privacy"><?php echo esc_html__( 'Default privacy', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<select id="wpse-default-privacy" name="default_privacy">
+							<?php foreach ( $labels as $value => $label ) : ?>
+								<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $current, $value ); ?>><?php echo esc_html( $label ); ?></option>
+							<?php endforeach; ?>
+						</select>
+						<p class="description"><?php echo esc_html__( 'Videos are private by default so that tests never show on your channel. Google may keep videos private whatever you choose until your Google Cloud project has passed its API audit.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+			</table>
+			<?php submit_button( __( 'Save upload settings', 'wp-scatter-elsewhere' ) ); ?>
+		</form>
+		<?php
+	}
+
 	private function renderStatus( YouTubeSettings $settings, string $status ): void {
 		if ( YouTubeSettings::STATUS_CONNECTED === $status ) {
 			$channel = '' !== $settings->channelTitle() ? $settings->channelTitle() : __( '(unknown channel)', 'wp-scatter-elsewhere' );
@@ -259,6 +308,7 @@ class SettingsPage {
 			'connected'    => __( 'Connected to YouTube.', 'wp-scatter-elsewhere' ),
 			'disconnected' => __( 'Disconnected from YouTube.', 'wp-scatter-elsewhere' ),
 			'templates_saved' => __( 'Templates saved.', 'wp-scatter-elsewhere' ),
+			'upload_saved'    => __( 'Upload settings saved.', 'wp-scatter-elsewhere' ),
 		];
 
 		if ( isset( $messages[ $code ] ) ) {

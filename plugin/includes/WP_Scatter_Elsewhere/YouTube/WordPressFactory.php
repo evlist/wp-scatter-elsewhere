@@ -5,7 +5,11 @@
 namespace WP_Scatter_Elsewhere\YouTube;
 
 use RuntimeException;
+use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
+use WP_Scatter_Elsewhere\YouTube\Upload\ResumableUploader;
+use WP_Scatter_Elsewhere\YouTube\Upload\UploadJobStore;
+use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
 
 /**
  * Wires the YouTube connection classes to WordPress. Contains no logic worth testing without WordPress.
@@ -13,6 +17,7 @@ use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 final class WordPressFactory {
 
 	public const CALLBACK_ACTION = 'wp_scatter_elsewhere_youtube_callback';
+	public const UPLOAD_HOOK     = 'wp_scatter_elsewhere_process_upload';
 
 	private const TOKEN_TRANSIENT = 'wp_scatter_elsewhere_youtube_access_token';
 	private const STATE_TRANSIENT = 'wp_scatter_elsewhere_oauth_state_';
@@ -80,6 +85,86 @@ final class WordPressFactory {
 			},
 			static fn(): int => time()
 		);
+	}
+
+	public static function uploadSettings(): UploadSettings {
+		return new UploadSettings(
+			static fn(): mixed => get_option( UploadSettings::optionKey(), false ),
+			static function ( array $value ): void {
+				update_option( UploadSettings::optionKey(), $value, false );
+			}
+		);
+	}
+
+	public static function uploadService(): UploadService {
+		$settings = self::settings();
+
+		return new UploadService(
+			new UploadJobStore(
+				static fn(): mixed => get_option( UploadJobStore::optionKey(), false ),
+				static function ( array $value ): void {
+					update_option( UploadJobStore::optionKey(), $value, false );
+				}
+			),
+			new ResumableUploader(
+				self::uploadHttp(),
+				self::accessTokenProvider( $settings ),
+				static function ( string $path, int $offset, int $length ): string|false {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+					$handle = fopen( $path, 'rb' );
+					if ( false === $handle ) {
+						return false;
+					}
+
+					$data = 0 === fseek( $handle, $offset ) ? fread( $handle, $length ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
+					fclose( $handle ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+
+					return $data;
+				},
+				static fn(): int => time()
+			),
+			self::uploadSettings(),
+			static function ( int $when, string $jobId ): void {
+				// Refused without effect when the same run is already scheduled.
+				wp_schedule_single_event( $when, self::UPLOAD_HOOK, [ $jobId ] );
+			},
+			static fn(): int => time(),
+			static fn(): string => 'j' . bin2hex( random_bytes( 6 ) )
+		);
+	}
+
+	/**
+	 * @return \Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string}
+	 */
+	private static function uploadHttp(): \Closure {
+		return static function ( string $method, string $url, array $headers, string $body ): array {
+			$response = wp_remote_request(
+				$url,
+				[
+					'method'      => $method,
+					'headers'     => $headers,
+					'body'        => $body,
+					'timeout'     => 120,
+					// A 308 answer means "resume incomplete", not a redirection.
+					'redirection' => 0,
+				]
+			);
+
+			if ( is_wp_error( $response ) ) {
+				throw new RuntimeException( $response->get_error_message() );
+			}
+
+			$responseHeaders = [];
+			foreach ( wp_remote_retrieve_headers( $response ) as $name => $value ) {
+				$responseHeaders[ strtolower( (string) $name ) ] = is_array( $value ) ? (string) end( $value ) : (string) $value;
+			}
+
+			return [
+				'status'  => (int) wp_remote_retrieve_response_code( $response ),
+				'headers' => $responseHeaders,
+				'body'    => (string) wp_remote_retrieve_body( $response ),
+			];
+		};
 	}
 
 	/**

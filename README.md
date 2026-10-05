@@ -30,6 +30,29 @@ plugins. Anyone who can read the database can use them. Google may expire
 authorisations of a project left in *Testing* status after a short period;
 publish the project to avoid this.
 
+## Uploading a video
+
+The first entry point is WP-CLI (an editor interface will come later). The post
+must be published, because the plugin reads its public page to find the videos.
+
+```
+wp scatter-elsewhere videos <post-id>
+wp scatter-elsewhere upload <post-id> [<video-id>] [--privacy=private] [--now]
+wp scatter-elsewhere jobs
+wp scatter-elsewhere retry <job-id> [--now]
+```
+
+- **Videos are private by default** (setting *Default privacy*), so tests do not
+  show on your channel. Delete test videos in YouTube Studio.
+- To the best of our knowledge, Google keeps the videos uploaded by a project
+  that has not passed its API compliance audit private, whatever the requested
+  privacy.
+- Without `--now` the upload runs in the background with WP-Cron, which only runs
+  when the site is visited. For a site with little traffic, call `wp-cron.php`
+  from a system cron.
+- An upload is the most expensive YouTube API call. With the default daily quota
+  of a Google Cloud project, only a few uploads fit in a day, tests included.
+
 ## Requirements
 
 - WordPress 6.x or later.
