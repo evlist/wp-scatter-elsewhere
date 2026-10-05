@@ -5,7 +5,7 @@
 /**
  * Plugin Name: WP Scatter Everywhere
  * Plugin URI:  https://github.com/evlist/wp-scatter-everywhere
- * Description: Scatter everywhere.
+ * Description: Disperses content and media published on a blog to other places, starting with YouTube.
  * Version:     0.1.0
  * Author:      Eric van der Vlist
  * Author URI:  https://dyomedea.com
