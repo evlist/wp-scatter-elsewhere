@@ -14,9 +14,9 @@ plugin.
    is registered in the WordPress media library (for example with
    [wp-media-helper](https://github.com/evlist/wp-media-helper)). The plugin
    therefore starts from a video attachment in the media library.
-2. A Python script run on the server calls
-   [noviceiii/youtube-upload](https://github.com/noviceiii/youtube-upload) to
-   upload the video:
+2. A Python script run on the server uploads the video through the YouTube
+   Data API (a `youtube-upload.py` wrapper built on `google-api-python-client`,
+   which is itself called by a script that builds the metadata):
    - title: the post title;
    - description: publication date, post excerpt and a link to the post.
 3. Manually, in YouTube Studio:
@@ -36,42 +36,66 @@ Python script, the shell or YouTube Studio:
 | Title | post title | `snippet.title` |
 | Description | publication date, excerpt, post permalink | `snippet.description` |
 | Thumbnail | post featured image | `thumbnails.set` |
-| Playlists | to be defined (see open questions) | `playlistItems.insert` |
-| Language | to be defined | `snippet.defaultLanguage`, `snippet.defaultAudioLanguage` |
-| Subtitles | existing subtitle files on the blog | `captions.insert` |
+| Playlists | post categories mapped to playlists in the settings | `playlistItems.insert` |
+| Language | site language | `snippet.defaultLanguage`, `snippet.defaultAudioLanguage` |
+| Subtitles | existing WebVTT files on the blog | `captions.insert` |
+| Privacy | asked at publication, `public` by default | `status.privacyStatus` |
+| License | asked at publication, with a default in the settings | `status.license` |
+| Recording date | post date (see decisions) | `recordingDetails.recordingDate` |
+
+## Decisions
+
+- **Playlists:** an editable *category → playlist* table on the settings page.
+  A post category absent from the table is ignored; a category present adds the
+  video to the matching playlist.
+- **Language:** the site language.
+- **Subtitles:** WebVTT files already published on the blog. If YouTube needs
+  a conversion, the plugin performs it (to be verified against the API when the
+  slice is written).
+- **Trigger:** the user is asked at publication time (pre-publish panel in the
+  block editor), and a button in the editor lets them publish to YouTube
+  afterwards if they did not do it then.
+- **Choices at publication:** the video to use when the post contains several
+  (one video per run, as in the current script), the privacy status (`public`
+  by default) and the license.
+- **Scheduling:** not used. Posts about a past hike are back-dated, so the post
+  date is the *event* date and is not a publication schedule. The plugin never
+  maps the post date to `publishAt`. It may send it as the video recording date.
+- **Other parameters:** the script exposes more (tags, category, location,
+  made for kids, public statistics, targeting). They are lower priority and are
+  added after the core flow, as settings with defaults, overridable at
+  publication when it makes sense.
 
 ## Design directions
 
 - No shell at runtime (see [constraints](constraints.md)): the plugin talks to
-  the YouTube Data API v3 directly from PHP instead of wrapping
-  `youtube-upload`. The script remains a functional reference for the metadata
-  rules, not a dependency.
-- Uploads are long-running: they must run as background jobs with a visible
+  the YouTube Data API v3 directly from PHP. The existing Python script is the
+  functional reference (resumable upload with exponential back-off, thumbnail,
+  playlist, token refresh).
+- Authorisation cannot use the `urn:ietf:wg:oauth:2.0:oob` flow of the script,
+  which Google has retired. The plugin uses a standard redirect to a WordPress
+  admin URL and stores the refresh token itself.
+- Uploads are long-running: they run as background jobs with a visible
   status, never inside an editor request.
-- A destination abstraction (connect, publish, status) keeps room for other
-  destinations later; it is introduced only when a second destination exists,
-  not speculatively.
 - The YouTube video id and publication status are stored on WordPress so a
   video is never uploaded twice and can be linked or embedded afterwards.
-- OAuth credentials are configured on the plugin settings page
-  (`manage_options`), like other settings.
-- The YouTube Data API has a daily quota; an upload is by far the most
-  expensive call, so the job must handle quota errors and resume later.
+- OAuth credentials and the category → playlist table live on the plugin
+  settings page (`manage_options`).
+- YouTube is the first *destination*; a destination abstraction is introduced
+  only when a second one exists.
+- The YouTube Data API has a daily quota and an upload is the most expensive
+  call: the job handles quota errors and resumes later.
 
 ## Open questions
 
-1. Where is the current Python script, and may it be added to the repository
-   as a reference for the description format?
-2. Which playlists does a video go into, and how is that decided: a post
-   category or tag, a post meta field, a choice in the editor?
-3. Where does the video language come from: the site locale, a post language
-   (Polylang, WPML, ...), a per-video setting?
-4. In which format are the subtitles stored on the blog (where, and which
-   format), and which language does each file have?
-5. Trigger: button in the editor, automatic on post publication, or both?
-6. Visibility of the YouTube video (public, unlisted, private) and whether
-   the upload may be scheduled to match the post publication date.
-7. After upload, should the plugin only store the YouTube id, or also replace
-   the media file with a YouTube embed in the post?
-8. A post may contain several videos; is one video per post enough for the
-   first slice?
+1. **Description template:** the script provided is the uploader, not the one
+   that builds the description. What is the exact format (date format, excerpt,
+   link wording, language)? Is it translatable?
+2. **Subtitles location:** how are the VTT files attached to a post (media
+   library attachments, a block, a meta field) and how is each file's language
+   known?
+3. **Tags and category:** are YouTube keywords taken from post tags, and is the
+   YouTube category always 22 (People & Blogs)?
+4. **Recording date:** should the post date be sent as the recording date?
+5. **Embedding:** after upload, should the plugin only store the YouTube id, or
+   also offer to replace the media file by an embed in the post?

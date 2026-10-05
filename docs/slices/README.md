@@ -12,7 +12,9 @@ when a slice is about to start. Tentative plan for the YouTube destination (see
 3. Video upload: resumable upload of a media-library video as a background job.
 4. Publication state: store the YouTube id and status; prevent double uploads.
 5. Thumbnail from the post featured image.
-6. Playlists.
-7. Video language.
-8. Subtitles.
-9. Editor trigger and status panel.
+6. Playlists from a category → playlist settings table.
+7. Video language, license and recording date.
+8. Subtitles (WebVTT).
+9. Pre-publish panel: choose the video, privacy and license when publishing.
+10. Post-publication editor button and status.
+11. Additional parameters (tags, category, location, ...).
