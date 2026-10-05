@@ -158,6 +158,23 @@ Under `plugin/includes/WP_Scatter_Everywhere/Detection/`: `VideoDetector`,
 - The page is fetched from the same server. Sites that block loopback requests,
   or put authentication in front of the whole site, will get a clear error;
   other detection strategies can be added behind the interface if needed.
+- Status: implemented and unit-tested, including against an excerpt of a real
+  blog page (`tests/fixtures/grenoble-salers.html`). `WordPressDetectorFactory`
+  wires the closures to WordPress and is the only part not covered by tests.
+  The loopback request has no TLS relaxation by default; the
+  `wp_scatter_everywhere_loopback_sslverify` filter exists for local environments.
+- Other detection strategies, not implemented for now, that fit behind
+  `VideoDetector`:
+
+  | Strategy | Sees theme-generated markup | Needs HTTP | Risk |
+  |----------|-----------------------------|------------|------|
+  | Rendered page (loopback), implemented | yes | yes | low |
+  | In-process template rendering: replace the main query with the post, `setup_postdata()`, locate the template, include it under output buffering | yes | no | medium: the theme runs outside a normal request (headers, `exit`, conditionals, globals, enqueued scripts, admin/REST/cron context) |
+  | `the_content` filter on the post content | no, only what is in the content | no | low |
+  | Attachments and the `foo-fr.vtt` naming convention | n/a | no | depends on the convention |
+
+  No WordPress function renders the full page of a post from its ID without
+  its public URL: the in-process route emulates the template loader.
 - The `id` is derived from the local path so a video keeps the same identity
   across detections, which later slices rely on to store the YouTube video id and
   prevent a second upload.
