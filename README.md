@@ -51,6 +51,8 @@ wp scatter-elsewhere retry <job-id> [--now]
   converted to SBV, the YouTube format, by default (setting *Subtitle format*: SBV, SRT or WebVTT as it is). A problem with the
   subtitles never fails the upload, it shows as a warning in `jobs`. To send or
   replace them later: `wp scatter-elsewhere subtitles <post-id> [<video-id>]`.
+- To see what YouTube holds for the subtitles of a video (state, failure reason,
+  automatic or creator track): `wp scatter-elsewhere captions <post-id> [<video-id>]`.
 - **Videos are private by default** (setting *Default privacy*), so tests do not
   show on your channel. Delete test videos in YouTube Studio.
 - To the best of our knowledge, Google keeps the videos uploaded by a project

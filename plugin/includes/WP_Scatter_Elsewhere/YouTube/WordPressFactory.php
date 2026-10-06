@@ -138,9 +138,13 @@ final class WordPressFactory {
 		);
 	}
 
+	public static function captionClient(): CaptionClient {
+		return new CaptionClient( self::uploadHttp(), self::accessTokenProvider( self::settings() ), static fn(): string => 'wpse' . bin2hex( random_bytes( 12 ) ) );
+	}
+
 	public static function subtitleService(): SubtitleService {
 		return new SubtitleService(
-			new CaptionClient( self::uploadHttp(), self::accessTokenProvider( self::settings() ), static fn(): string => 'wpse' . bin2hex( random_bytes( 12 ) ) ),
+			self::captionClient(),
 			new SubtitleConverter(),
 			self::uploadSettings(),
 			static function ( string $path ): string|false {

@@ -47,14 +47,39 @@ final class CaptionClient {
 	 * @throws CaptionException
 	 */
 	public function standardTracks( string $youtubeId ): array {
+		$tracks = [];
+		foreach ( $this->tracks( $youtubeId ) as $track ) {
+			if ( 'standard' === $track['kind'] ) {
+				$tracks[ $track['language'] ] ??= $track['id'];
+			}
+		}
+
+		return $tracks;
+	}
+
+	/**
+	 * All the caption tracks of a video, with the state YouTube gives them.
+	 *
+	 * @return array<int, array{id: string, language: string, name: string, kind: string, status: string, failure: string, draft: bool}>
+	 * @throws CaptionException
+	 */
+	public function tracks( string $youtubeId ): array {
 		$response = $this->send( 'GET', self::LIST_ENDPOINT . rawurlencode( $youtubeId ), [ 'Authorization' => 'Bearer ' . $this->tokens->getAccessToken() ], '' );
 		$data     = json_decode( $response['body'], true );
 
 		$tracks = [];
 		foreach ( is_array( $data ) ? (array) ( $data['items'] ?? [] ) : [] as $item ) {
-			$snippet = $item['snippet'] ?? [];
-			if ( 'standard' === ( $snippet['trackKind'] ?? 'standard' ) && isset( $item['id'], $snippet['language'] ) ) {
-				$tracks[ (string) $snippet['language'] ] ??= (string) $item['id'];
+			$snippet = is_array( $item['snippet'] ?? null ) ? $item['snippet'] : [];
+			if ( isset( $item['id'], $snippet['language'] ) ) {
+				$tracks[] = [
+					'id'       => (string) $item['id'],
+					'language' => (string) $snippet['language'],
+					'name'     => (string) ( $snippet['name'] ?? '' ),
+					'kind'     => (string) ( $snippet['trackKind'] ?? 'standard' ),
+					'status'   => (string) ( $snippet['status'] ?? '' ),
+					'failure'  => (string) ( $snippet['failureReason'] ?? '' ),
+					'draft'    => (bool) ( $snippet['isDraft'] ?? false ),
+				];
 			}
 		}
 

@@ -202,6 +202,52 @@ final class Command {
 	}
 
 	/**
+	 * Lists the caption tracks that YouTube holds for the video recorded for a post, with their state.
+	 *
+	 * Shows whether a track is serving, still syncing or failed (and why), whether it is a draft, and
+	 * tells the tracks of the creator ("standard") from the automatic ones ("asr").
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a post.
+	 *
+	 * [<video-id>]
+	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
+	 *
+	 * @param string[] $args
+	 */
+	public function captions( array $args ): void {
+		$publication = $this->selectPublication( (int) $args[0], $args[1] ?? null );
+
+		try {
+			$tracks = WordPressFactory::captionClient()->tracks( $publication->youtubeId );
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		if ( [] === $tracks ) {
+			WP_CLI::warning( __( 'YouTube holds no caption track for this video.', 'wp-scatter-elsewhere' ) );
+			return;
+		}
+
+		$rows = array_map(
+			static fn( array $track ): array => [
+				'id'       => $track['id'],
+				'language' => $track['language'],
+				'name'     => $track['name'],
+				'kind'     => $track['kind'],
+				'status'   => $track['status'],
+				'failure'  => $track['failure'],
+				'draft'    => $track['draft'] ? 'yes' : 'no',
+			],
+			$tracks
+		);
+
+		\WP_CLI\Utils\format_items( 'table', $rows, [ 'id', 'language', 'name', 'kind', 'status', 'failure', 'draft' ] );
+	}
+
+	/**
 	 * Applies properties of a post to the YouTube video recorded for it.
 	 *
 	 * ## OPTIONS
