@@ -74,7 +74,8 @@ final class PostYouTubeState {
 			'youtube' => null === $publication ? null : [
 				'id'      => $publication->youtubeId,
 				'url'     => $publication->url(),
-				'privacy' => $publication->privacy,
+				'privacy'    => $publication->privacy,
+				'checked_at' => $publication->checkedAt,
 			],
 			// A finished job is told by the YouTube video; the job only matters while it is active or failed.
 			'job'     => null === $job || UploadJob::STATUS_DONE === $job->status() ? null : [

@@ -36,7 +36,9 @@ In the block editor, the **YouTube** panel appears after the post is published (
 document sidebar of a published post). It lists the videos found in the public page of
 the post, lets you choose the privacy and the license (the defaults of the settings, so
 private unless changed), and starts the upload with **Publish to YouTube**. It shows the
-progress, the YouTube link, the warnings, and a **Retry** button when an upload failed. It
+progress, the YouTube link with the privacy chosen at upload time (the **Check on YouTube**
+button reads the real privacy, for about 1 unit of quota), the warnings, and a **Retry** button
+when an upload failed. It
 needs the `manage_options` capability (filter `wp_scatter_elsewhere_capability`). Uploads
 run in the background with WP-Cron, see below.
 

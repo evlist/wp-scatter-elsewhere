@@ -15,9 +15,11 @@ use WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory;
 use WP_Scatter_Elsewhere\Editor\PostYouTubeState;
 use WP_Scatter_Elsewhere\Editor\UploadRequestValidator;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
+use WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException;
 
 /**
  * The REST routes of the YouTube panel of the editor.
@@ -64,6 +66,16 @@ final class YouTubeController {
 			[
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => [ $this, 'upload' ],
+				'permission_callback' => [ $this, 'canUsePostPanel' ],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
+			'/post/(?P<id>\d+)/youtube/check',
+			[
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => [ $this, 'check' ],
 				'permission_callback' => [ $this, 'canUsePostPanel' ],
 			]
 		);
@@ -195,6 +207,31 @@ final class YouTubeController {
 		spawn_cron();
 
 		return $this->statuses( $request );
+	}
+
+	/**
+	 * Reads the real privacy of the YouTube video of a video of the post, and records it.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function check( WP_REST_Request $request ) {
+		$postId      = (int) $request['id'];
+		$publication = WordPressFactory::uploadService()->publicationFor( $postId, (string) $request->get_param( 'video_id' ) );
+
+		if ( null === $publication ) {
+			return new WP_Error( 'wp_scatter_elsewhere_no_youtube_video', __( 'No YouTube video is recorded for this video.', 'wp-scatter-elsewhere' ), [ 'status' => 404 ] );
+		}
+
+		try {
+			$publication = PublicationFactory::refresher()->refresh( $postId, $publication, time() );
+		} catch ( YouTubeConnectionException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_check', $e->getMessage(), [ 'status' => 502 ] );
+		}
+
+		// Only the YouTube video is answered: the upload job of the video, if any, must stay as it is.
+		$status = ( new PostYouTubeState() )->statuses( [ $publication->videoId => $publication ], [] )[ $publication->videoId ];
+
+		return new WP_REST_Response( [ 'videos' => [ $publication->videoId => [ 'youtube' => $status['youtube'] ] ] ] );
 	}
 
 	/**

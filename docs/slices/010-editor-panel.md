@@ -57,6 +57,10 @@ Namespace `wp-scatter-elsewhere/v1`:
   request, builds the metadata of the post (slices 002, 006, 007 and 008) and creates the
   upload job. Refused when the video cannot be uploaded, already has a YouTube video or
   an upload in progress, or when the privacy or license is invalid.
+- `POST /post/<id>/youtube/check` with `video_id`: reads the privacy of the YouTube video
+  from YouTube and records it. Answers 404 when no YouTube video is recorded for the video,
+  and 502 with the message of YouTube when it cannot be read or no longer has the video
+  (the recorded privacy is then kept).
 - `POST /job/<id>/retry`: restarts a failed upload (slice 004).
 
 Errors are returned as REST errors with a readable message.
@@ -72,6 +76,10 @@ Errors are returned as REST errors with a readable message.
     it is the privacy set when the video was uploaded, which may have changed since (for
     example in YouTube Studio) because the plugin does not check it, and the warnings of
     the job if any;
+  - a video that is on YouTube also has a **Check on YouTube** button, which reads its real
+    privacy (about 1 unit of quota), shows it and records it with the time of the check; the
+    info mark then says that the privacy was read from YouTube on that date. Nothing is read
+    unless the button is clicked;
   - failed: the error and a **Retry** button.
 - Polling every few seconds while an upload is in progress, and only then.
 - A video that already has a YouTube video shows its link and no button.
@@ -84,6 +92,8 @@ Under `plugin/includes/WP_Scatter_Elsewhere/`:
 - `Editor/PostYouTubeState.php`: turns the detected videos, publications and jobs into
   the data sent to the panel; pure and unit-tested.
 - `Editor/UploadRequestValidator.php`: validates an upload request; pure and unit-tested.
+- `YouTube/VideoInspector.php` and `Publication/PublicationRefresher.php`: reading and
+  recording the real privacy of a YouTube video.
 - `Rest/YouTubeController.php`: the routes and their permissions (WordPress glue).
 - `Admin/EditorPanel.php`: loads the script in the editor and its translations.
 - `plugin/assets/js/editor-youtube-panel.js`: the panel, without build step, in the
@@ -118,7 +128,7 @@ Under `plugin/includes/WP_Scatter_Elsewhere/`:
   time: they share one state, one loading and one polling, so that an action in one is
   seen in the other.
 - Status: implemented. The presenter, the validator and `UploadService::jobsForPost` are
-  unit-tested (303 PHP tests in total). The script was exercised with a throw-away harness
+  unit-tested, like the inspector and the refresher (310 PHP tests in total). The script was exercised with a throw-away harness
   (jsdom and React, with stand-ins for the `wp` packages, not kept in the repository):
   display of a video, upload with the chosen privacy and license, progress and link,
   retry, the error and explanation states, and the sharing between the two panels. The

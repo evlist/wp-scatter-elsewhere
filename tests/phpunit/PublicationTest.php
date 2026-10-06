@@ -85,4 +85,14 @@ class PublicationTest extends TestCase {
 		$this->assertNull( PublicationLinks::select( $all, 'zzz', true ) );
 		$this->assertNull( PublicationLinks::select( [], null, true ) );
 	}
+
+	public function test_the_time_of_the_last_check_is_kept_only_when_there_is_one(): void {
+		$never   = new Publication( 'a', 'aaaaaaaaaaa', 'private', 1, 'j1' );
+		$checked = new Publication( 'a', 'aaaaaaaaaaa', 'public', 1, 'j1', 99 );
+
+		$this->assertArrayNotHasKey( 'checked_at', $never->toArray() );
+		$this->assertSame( 99, $checked->toArray()['checked_at'] );
+		$this->assertNull( Publication::fromArray( 'a', $never->toArray() )->checkedAt );
+		$this->assertSame( 99, Publication::fromArray( 'a', $checked->toArray() )->checkedAt );
+	}
 }

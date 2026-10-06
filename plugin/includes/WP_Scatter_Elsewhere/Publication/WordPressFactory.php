@@ -18,6 +18,10 @@ final class WordPressFactory {
 		);
 	}
 
+	public static function refresher(): PublicationRefresher {
+		return new PublicationRefresher( \WP_Scatter_Elsewhere\YouTube\WordPressFactory::videoInspector(), self::store() );
+	}
+
 	/**
 	 * The YouTube address of a video of a post, or null.
 	 */

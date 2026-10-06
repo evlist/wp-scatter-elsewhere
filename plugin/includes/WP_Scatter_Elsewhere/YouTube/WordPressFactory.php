@@ -142,6 +142,10 @@ final class WordPressFactory {
 		);
 	}
 
+	public static function videoInspector(): VideoInspector {
+		return new VideoInspector( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
+	}
+
 	public static function playlistClient(): PlaylistClient {
 		return new PlaylistClient( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
 	}

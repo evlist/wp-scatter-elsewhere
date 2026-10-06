@@ -66,7 +66,7 @@ class EditorPanelStateTest extends TestCase {
 
 		$video = ( new PostYouTubeState() )->present( [ $this->video( 'v1' ) ], $publications, [], 'private', 'youtube' )['videos'][0];
 
-		$this->assertSame( [ 'id' => '9FzZpnEKL-s', 'url' => 'https://www.youtube.com/watch?v=9FzZpnEKL-s', 'privacy' => 'private' ], $video['youtube'] );
+		$this->assertSame( [ 'id' => '9FzZpnEKL-s', 'url' => 'https://www.youtube.com/watch?v=9FzZpnEKL-s', 'privacy' => 'private', 'checked_at' => null ], $video['youtube'] );
 	}
 
 	public function test_an_active_job_is_described_with_its_progress(): void {
@@ -139,5 +139,11 @@ class EditorPanelStateTest extends TestCase {
 			'bad privacy'    => [ [ 'video_id' => 'v1', 'privacy' => 'everyone' ] ],
 			'bad license'    => [ [ 'video_id' => 'v1', 'license' => 'mit' ] ],
 		];
+	}
+
+	public function test_the_time_of_the_last_check_of_the_privacy_is_given(): void {
+		$statuses = ( new PostYouTubeState() )->statuses( [ 'v1' => new Publication( 'v1', '9FzZpnEKL-s', 'public', 5, null, 1760000000 ) ], [] );
+
+		$this->assertSame( 1760000000, $statuses['v1']['youtube']['checked_at'] );
 	}
 }

@@ -59,12 +59,16 @@
 	// The privacy is the one requested when the video was uploaded: the plugin does not read it again from YouTube.
 	const PRIVACY_HELP = __( 'Privacy set when the video was uploaded. It may have changed since, for example in YouTube Studio: the plugin does not check it.', 'wp-scatter-elsewhere' );
 
-	const privacyInfo = function ( privacy ) {
+	const privacyInfo = function ( privacy, checkedAt ) {
 		const label = privacyLabel( privacy );
 
 		if ( ! label ) {
 			return null;
 		}
+
+		const help = checkedAt
+			? /* translators: %s: date and time. */ sprintf( __( 'Privacy read from YouTube on %s.', 'wp-scatter-elsewhere' ), new Date( checkedAt * 1000 ).toLocaleString() )
+			: PRIVACY_HELP;
 
 		return el(
 			'span',
@@ -72,8 +76,8 @@
 			' (' + label + ' ',
 			el(
 				Tooltip,
-				{ text: PRIVACY_HELP },
-				el( 'span', { tabIndex: 0, role: 'img', 'aria-label': PRIVACY_HELP, style: { cursor: 'help' } }, '\u24D8' )
+				{ text: help },
+				el( 'span', { tabIndex: 0, role: 'img', 'aria-label': help, style: { cursor: 'help' } }, '\u24D8' )
 			),
 			')'
 		);
@@ -87,7 +91,7 @@
 	 * One video of the post: its details, and its state or the controls to upload it.
 	 */
 	const VideoRow = function ( props ) {
-		const { video, privacy, license, busy, onUpload, onRetry } = props;
+		const { video, privacy, license, busy, onUpload, onRetry, onCheck } = props;
 		const job = video.job;
 		const active = job && ACTIVE_STATUSES.includes( job.status );
 		const languages = ( video.subtitles || [] )
@@ -120,7 +124,19 @@
 					'p',
 					{ key: 'youtube', style: { margin: '0 0 4px' } },
 					el( 'a', { href: video.youtube.url, target: '_blank', rel: 'noopener noreferrer' }, __( 'Watch on YouTube', 'wp-scatter-elsewhere' ) ),
-					privacyInfo( video.youtube.privacy )
+					privacyInfo( video.youtube.privacy, video.youtube.checked_at ),
+					' ',
+					el(
+						Button,
+						{
+							variant: 'link',
+							isSmall: true,
+							isBusy: busy === 'check:' + video.id,
+							disabled: !! busy,
+							onClick: () => onCheck( video.id ),
+						},
+						__( 'Check on YouTube', 'wp-scatter-elsewhere' )
+					)
 				)
 			);
 		} else if ( active ) {
@@ -295,6 +311,13 @@
 				data: { video_id: videoId, privacy: privacy, license: license },
 			} );
 
+		const check = ( videoId ) =>
+			send( postId, 'check:' + videoId, {
+				path: NAMESPACE + '/post/' + postId + '/youtube/check',
+				method: 'POST',
+				data: { video_id: videoId },
+			} );
+
 		const retry = ( jobId ) => send( postId, jobId, { path: NAMESPACE + '/job/' + jobId + '/retry', method: 'POST' } );
 
 		if ( ! isPublished ) {
@@ -362,7 +385,7 @@
 		}
 
 		data.videos.forEach( ( video ) => {
-			children.push( el( VideoRow, { key: video.id, video: video, privacy: privacy, license: license, busy: busy, onUpload: upload, onRetry: retry } ) );
+			children.push( el( VideoRow, { key: video.id, video: video, privacy: privacy, license: license, busy: busy, onUpload: upload, onRetry: retry, onCheck: check } ) );
 		} );
 
 		return el( 'div', null, children );

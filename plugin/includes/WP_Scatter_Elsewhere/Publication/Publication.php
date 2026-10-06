@@ -14,13 +14,15 @@ final class Publication {
 	/**
 	 * @param ?string $privacy As requested at upload time; null when unknown (manual link).
 	 * @param ?string $jobId   Null for a manual link.
+	 * @param ?int    $checkedAt Unix time at which the privacy was last read from YouTube, null when it never was.
 	 */
 	public function __construct(
 		public readonly string $videoId,
 		public readonly string $youtubeId,
 		public readonly ?string $privacy,
 		public readonly int $publishedAt,
-		public readonly ?string $jobId
+		public readonly ?string $jobId,
+		public readonly ?int $checkedAt = null
 	) {
 	}
 
@@ -40,15 +42,21 @@ final class Publication {
 	}
 
 	/**
-	 * @return array{youtube_id: string, privacy: ?string, published_at: int, job_id: ?string}
+	 * @return array<string, mixed>
 	 */
 	public function toArray(): array {
-		return [
+		$data = [
 			'youtube_id'   => $this->youtubeId,
 			'privacy'      => $this->privacy,
 			'published_at' => $this->publishedAt,
 			'job_id'       => $this->jobId,
 		];
+
+		if ( null !== $this->checkedAt ) {
+			$data['checked_at'] = $this->checkedAt;
+		}
+
+		return $data;
 	}
 
 	/**
@@ -65,7 +73,8 @@ final class Publication {
 			$youtubeId,
 			isset( $data['privacy'] ) ? (string) $data['privacy'] : null,
 			(int) ( $data['published_at'] ?? 0 ),
-			isset( $data['job_id'] ) ? (string) $data['job_id'] : null
+			isset( $data['job_id'] ) ? (string) $data['job_id'] : null,
+			isset( $data['checked_at'] ) ? (int) $data['checked_at'] : null
 		);
 	}
 }
