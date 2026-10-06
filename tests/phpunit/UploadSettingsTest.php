@@ -27,6 +27,7 @@ class UploadSettingsTest extends TestCase {
 			$this->assertSame( '', $settings->language() );
 			$this->assertTrue( $settings->sendsRecordingDate() );
 			$this->assertSame( 'sbv', $settings->subtitleFormat() );
+			$this->assertFalse( $settings->removesAutomaticCaptions() );
 		}
 	}
 
@@ -49,10 +50,10 @@ class UploadSettingsTest extends TestCase {
 	}
 
 	public function test_saves_valid_values(): void {
-		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false, 'vtt' );
+		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false, 'vtt', true );
 
 		$this->assertSame(
-			[ 'subtitle_format' => 'vtt', 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
+			[ 'subtitle_format' => 'vtt', 'remove_auto_captions' => true, 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
 			$this->saved
 		);
 	}

@@ -38,25 +38,40 @@ final class SubtitleService {
 	/**
 	 * Adds the tracks that YouTube does not have for a language, and replaces the ones it has.
 	 *
-	 * A problem with one track does not stop the others; a quota error stops everything.
+	 * A problem with one track does not stop the others; a quota error stops everything. When asked,
+	 * the automatic (speech recognition) tracks of the languages that were sent are removed afterwards.
 	 *
-	 * @param array<int, array{language: string, path: string, name?: string}> $tracks The name is the one shown by YouTube for the track; the language code when empty.
+	 * @param array<int, array{language: string, path: string, name?: string}> $tracks             The name is the one shown by YouTube for the track; the language code when empty.
+	 * @param ?bool                                                             $removeAutomatic Null for the setting.
 	 */
-	public function sync( string $youtubeId, array $tracks ): SubtitleResult {
+	public function sync( string $youtubeId, array $tracks, ?bool $removeAutomatic = null ): SubtitleResult {
 		$tracks = $this->onePerLanguage( $tracks );
 
 		if ( [] === $tracks ) {
 			return new SubtitleResult( [], [] );
 		}
 
-		$actions = [];
-		$errors  = [];
+		$removeAutomatic ??= $this->settings->removesAutomaticCaptions();
 
 		try {
-			$existing = $this->client->standardTracks( $youtubeId );
+			$existing = $this->client->tracks( $youtubeId );
 		} catch ( CaptionException $e ) {
 			return new SubtitleResult( [], [ '*' => $e->getMessage() ] );
 		}
+
+		$standard  = [];
+		$automatic = [];
+		foreach ( $existing as $track ) {
+			if ( 'standard' === $track['kind'] ) {
+				$standard[ $track['language'] ] ??= $track['id'];
+			} elseif ( 'asr' === $track['kind'] ) {
+				$automatic[ $track['language'] ][] = $track['id'];
+			}
+		}
+
+		$actions = [];
+		$errors  = [];
+		$removed = [];
 
 		foreach ( $tracks as $track ) {
 			$language = $track['language'];
@@ -68,12 +83,17 @@ final class SubtitleService {
 			}
 
 			try {
-				if ( isset( $existing[ $language ] ) ) {
-					$this->client->replace( $existing[ $language ], $content );
+				if ( isset( $standard[ $language ] ) ) {
+					$this->client->replace( $standard[ $language ], $content );
 					$actions[ $language ] = SubtitleResult::REPLACED;
 				} else {
 					$this->client->insert( $youtubeId, $language, '' !== trim( (string) ( $track['name'] ?? '' ) ) ? trim( (string) $track['name'] ) : $language, $content );
 					$actions[ $language ] = SubtitleResult::INSERTED;
+				}
+
+				foreach ( $removeAutomatic ? ( $automatic[ $language ] ?? [] ) : [] as $captionId ) {
+					$this->client->delete( $captionId );
+					$removed[ $language ] = ( $removed[ $language ] ?? 0 ) + 1;
 				}
 			} catch ( CaptionException $e ) {
 				$errors[ $language ] = $e->getMessage();
@@ -84,7 +104,7 @@ final class SubtitleService {
 			}
 		}
 
-		return new SubtitleResult( $actions, $errors );
+		return new SubtitleResult( $actions, $errors, $removed );
 	}
 
 	/**

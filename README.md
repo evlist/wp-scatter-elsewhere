@@ -49,7 +49,8 @@ wp scatter-elsewhere retry <job-id> [--now]
   `wp scatter-elsewhere apply-metadata <post-id> [<video-id>] [--fields=language,license,recording_date]`.
 - Subtitles: the `<track>` files of the page (WebVTT) are sent after an upload,
   converted to SBV, the YouTube format, by default (setting *Subtitle format*: SBV, SRT or WebVTT as it is). A problem with the
-  subtitles never fails the upload, it shows as a warning in `jobs`. To send or
+  subtitles never fails the upload, it shows as a warning in `jobs`. To delete the automatic captions of the
+  languages sent, enable the setting or use `--remove-auto`. To send or
   replace them later: `wp scatter-elsewhere subtitles <post-id> [<video-id>]`.
 - To see what YouTube holds for the subtitles of a video (state, failure reason,
   automatic or creator track): `wp scatter-elsewhere captions <post-id> [<video-id>]`.

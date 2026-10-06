@@ -90,6 +90,15 @@ class UploadSettings {
 		return is_string( $value ) && in_array( $value, self::SUBTITLE_FORMAT_VALUES, true ) ? $value : self::SUBTITLE_FORMAT_SBV;
 	}
 
+	/**
+	 * Whether the automatic captions of a language are removed when subtitles are sent for it.
+	 */
+	public function removesAutomaticCaptions(): bool {
+		$value = $this->stored( 'remove_auto_captions' );
+
+		return is_bool( $value ) ? $value : false;
+	}
+
 	public function sendsRecordingDate(): bool {
 		$value = $this->stored( 'send_recording_date' );
 
@@ -102,7 +111,7 @@ class UploadSettings {
 	 * @param string $language Empty to derive the language from the site language.
 	 * @throws InvalidArgumentException When a value is invalid; nothing is saved.
 	 */
-	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV ): void {
+	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV, bool $removeAutoCaptions = false ): void {
 		$language = trim( $language );
 
 		if ( ! self::isValidPrivacy( $privacy ) ) {
@@ -124,6 +133,7 @@ class UploadSettings {
 		( $this->saver )(
 			[
 				'subtitle_format'     => $subtitleFormat,
+				'remove_auto_captions' => $removeAutoCaptions,
 				'default_privacy'     => $privacy,
 				'default_license'     => $license,
 				'language'            => $language,

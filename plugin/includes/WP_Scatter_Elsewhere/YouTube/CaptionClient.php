@@ -12,6 +12,7 @@ use RuntimeException;
  */
 final class CaptionClient {
 
+	public const DELETE_ENDPOINT = 'https://www.googleapis.com/youtube/v3/captions?id=';
 	public const LIST_ENDPOINT   = 'https://www.googleapis.com/youtube/v3/captions?part=snippet&videoId=';
 	public const UPLOAD_ENDPOINT = 'https://www.googleapis.com/upload/youtube/v3/captions?uploadType=multipart&part=snippet';
 
@@ -104,6 +105,15 @@ final class CaptionClient {
 	}
 
 	/**
+	 * Deletes a caption track, including an automatic one when YouTube allows it.
+	 *
+	 * @throws CaptionException
+	 */
+	public function delete( string $captionId ): void {
+		$this->send( 'DELETE', self::DELETE_ENDPOINT . rawurlencode( $captionId ), [ 'Authorization' => 'Bearer ' . $this->tokens->getAccessToken() ], '' );
+	}
+
+	/**
 	 * @param array<string, mixed> $resource
 	 */
 	private function upload( string $method, array $resource, string $content ): void {
@@ -124,7 +134,7 @@ final class CaptionClient {
 	/**
 	 * @param array<string, string> $headers
 	 * @return array{status: int, headers: array<string, string>, body: string}
-	 * @throws CaptionException On transport errors and on any status but 200.
+	 * @throws CaptionException On transport errors and on any status but 200 and 204.
 	 */
 	private function send( string $method, string $url, array $headers, string $body ): array {
 		try {
@@ -139,7 +149,8 @@ final class CaptionClient {
 			);
 		}
 
-		if ( 200 !== $response['status'] ) {
+		// 204 answers a deletion.
+		if ( 200 !== $response['status'] && 204 !== $response['status'] ) {
 			throw new CaptionException( ApiErrors::describe( $response['status'], $response['body'] ), ApiErrors::isQuota( $response['status'], $response['body'] ) );
 		}
 

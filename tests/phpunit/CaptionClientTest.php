@@ -75,4 +75,35 @@ class CaptionClientTest extends TestCase {
 
 		$this->client( [ 'status' => 404, 'headers' => [], 'body' => '{}' ] )->tracks( 'vid' );
 	}
+
+	public function test_delete_accepts_204_and_sends_a_delete_request(): void {
+		$seen   = null;
+		$tokens = new AccessTokenProvider(
+			new YouTubeSettings( static fn(): array => [ 'refresh_token' => 'r', 'status' => 'connected' ], static function ( array $v ): void {} ),
+			new OAuthClient( 'id', 'secret', 'https://example.org/cb', static fn(): array => [ 'status' => 200, 'body' => [ 'access_token' => 'tok', 'expires_in' => 3600 ] ] ),
+			static fn(): ?array => null,
+			static function ( array $v, int $ttl ): void {},
+			static function (): void {},
+			static fn(): int => 0
+		);
+		$client = new CaptionClient(
+			static function ( string $method, string $url, array $headers, string $body ) use ( &$seen ): array {
+				$seen = [ $method, $url, $headers['Authorization'], $body ];
+
+				return [ 'status' => 204, 'headers' => [], 'body' => '' ];
+			},
+			$tokens,
+			static fn(): string => 'B'
+		);
+
+		$client->delete( 'a b' );
+
+		$this->assertSame( [ 'DELETE', 'https://www.googleapis.com/youtube/v3/captions?id=a%20b', 'Bearer tok', '' ], $seen );
+	}
+
+	public function test_a_refused_deletion_raises_an_error(): void {
+		$this->expectException( CaptionException::class );
+
+		$this->client( [ 'status' => 403, 'headers' => [], 'body' => '{}' ] )->delete( 'x' );
+	}
 }

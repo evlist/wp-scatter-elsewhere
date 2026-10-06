@@ -35,7 +35,7 @@ class SubtitleServiceTest extends TestCase {
 		return [ 'status' => 200, 'headers' => [], 'body' => '{}' ];
 	}
 
-	private function service( string $format = 'sbv' ): SubtitleService {
+	private function service( string $format = 'sbv', bool $removeAuto = false ): SubtitleService {
 		$tokens = new AccessTokenProvider(
 			new YouTubeSettings( static fn(): array => [ 'refresh_token' => 'r', 'status' => 'connected' ], static function ( array $v ): void {} ),
 			new OAuthClient( 'id', 'secret', 'https://example.org/cb', static fn(): array => [ 'status' => 200, 'body' => [ 'access_token' => 'tok', 'expires_in' => 3600 ] ] ),
@@ -57,7 +57,7 @@ class SubtitleServiceTest extends TestCase {
 		return new SubtitleService(
 			$client,
 			new SubtitleConverter(),
-			new UploadSettings( static fn(): array => [ 'subtitle_format' => $format ], static function ( array $v ): void {} ),
+			new UploadSettings( static fn(): array => [ 'subtitle_format' => $format, 'remove_auto_captions' => $removeAuto ], static function ( array $v ): void {} ),
 			fn( string $path ): string|false => $this->files[ $path ] ?? false
 		);
 	}
@@ -186,5 +186,74 @@ class SubtitleServiceTest extends TestCase {
 		$this->assertStringContainsString( 'Video not found.', $result->errors['*'] );
 		$this->assertStringNotContainsString( '*:', $result->errorSummary() );
 		$this->assertCount( 1, $this->requests );
+	}
+
+	private function withAutomaticTracks(): array {
+		return $this->list(
+			[
+				[ 'id' => 'asr-fr', 'snippet' => [ 'language' => 'fr', 'trackKind' => 'asr' ] ],
+				[ 'id' => 'asr-fr2', 'snippet' => [ 'language' => 'fr', 'trackKind' => 'asr' ] ],
+				[ 'id' => 'asr-de', 'snippet' => [ 'language' => 'de', 'trackKind' => 'asr' ] ],
+			]
+		);
+	}
+
+	public function test_automatic_tracks_are_kept_by_default(): void {
+		$this->responses = [ $this->withAutomaticTracks() ];
+
+		$result = $this->service()->sync( 'vid', self::tracks( 'fr' ) );
+
+		$this->assertSame( [], $result->removed );
+		$this->assertSame( [ 'GET', 'POST' ], array_column( $this->requests, 'method' ) );
+	}
+
+	public function test_deletes_the_automatic_tracks_of_the_languages_sent_when_the_setting_is_on(): void {
+		$this->responses = [ $this->withAutomaticTracks() ];
+
+		$result = $this->service( 'sbv', true )->sync( 'vid', self::tracks( 'fr' ) );
+
+		$this->assertSame( [ 'fr' => 2 ], $result->removed );
+		$this->assertSame( [ 'GET', 'POST', 'DELETE', 'DELETE' ], array_column( $this->requests, 'method' ) );
+		$this->assertSame( 'https://www.googleapis.com/youtube/v3/captions?id=asr-fr', $this->requests[2]['url'] );
+		$this->assertSame( 'https://www.googleapis.com/youtube/v3/captions?id=asr-fr2', $this->requests[3]['url'] );
+		$this->assertSame( [ 'fr' => SubtitleResult::INSERTED ], $result->actions );
+	}
+
+	public function test_the_option_overrides_the_setting(): void {
+		$this->responses = [ $this->withAutomaticTracks() ];
+		$this->assertSame( [ 'fr' => 2 ], $this->service()->sync( 'vid', self::tracks( 'fr' ), true )->removed );
+
+		$this->requests  = [];
+		$this->responses = [ $this->withAutomaticTracks() ];
+		$this->assertSame( [], $this->service( 'sbv', true )->sync( 'vid', self::tracks( 'fr' ), false )->removed );
+	}
+
+	public function test_a_refused_deletion_is_reported_without_undoing_the_subtitles(): void {
+		$this->responses = [ $this->withAutomaticTracks(), $this->ok(), [ 'status' => 403, 'headers' => [], 'body' => '{"error":{"message":"Forbidden."}}' ] ];
+
+		$result = $this->service( 'sbv', true )->sync( 'vid', self::tracks( 'fr' ) );
+
+		$this->assertSame( [ 'fr' => SubtitleResult::INSERTED ], $result->actions );
+		$this->assertStringContainsString( 'Forbidden.', $result->errors['fr'] );
+		$this->assertSame( [], $result->removed );
+	}
+
+	public function test_automatic_tracks_are_not_deleted_when_the_subtitles_could_not_be_sent(): void {
+		$this->responses = [ $this->withAutomaticTracks(), [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
+
+		$result = $this->service( 'sbv', true )->sync( 'vid', self::tracks( 'fr' ) );
+
+		$this->assertSame( [ 'GET', 'POST' ], array_column( $this->requests, 'method' ) );
+		$this->assertSame( [], $result->removed );
+		$this->assertArrayHasKey( 'fr', $result->errors );
+	}
+
+	public function test_a_replaced_track_also_removes_the_automatic_ones(): void {
+		$this->responses = [ $this->list( [ [ 'id' => 'cap1', 'snippet' => [ 'language' => 'fr', 'trackKind' => 'standard' ] ], [ 'id' => 'asr-fr', 'snippet' => [ 'language' => 'fr', 'trackKind' => 'asr' ] ] ] ) ];
+
+		$result = $this->service( 'sbv', true )->sync( 'vid', self::tracks( 'fr' ) );
+
+		$this->assertSame( [ 'fr' => SubtitleResult::REPLACED ], $result->actions );
+		$this->assertSame( [ 'GET', 'PUT', 'DELETE' ], array_column( $this->requests, 'method' ) );
 	}
 }

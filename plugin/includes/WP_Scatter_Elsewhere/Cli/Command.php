@@ -164,9 +164,13 @@ final class Command {
 	 * [<video-id>]
 	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
 	 *
-	 * @param string[] $args
+	 * [--remove-auto]
+	 * : Delete the automatic captions of the languages sent. Defaults to the setting.
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
 	 */
-	public function subtitles( array $args ): void {
+	public function subtitles( array $args, array $assoc = [] ): void {
 		$postId      = (int) $args[0];
 		$publication = $this->selectPublication( $postId, $args[1] ?? null );
 		$video       = $this->selectVideo( $this->detect( $postId ), $publication->videoId );
@@ -185,13 +189,17 @@ final class Command {
 		}
 
 		try {
-			$result = WordPressFactory::subtitleService()->sync( $publication->youtubeId, $tracks );
+			$result = WordPressFactory::subtitleService()->sync( $publication->youtubeId, $tracks, isset( $assoc['remove-auto'] ) ? true : null );
 		} catch ( YouTubeConnectionException $e ) {
 			WP_CLI::error( $e->getMessage() );
 		}
 
 		foreach ( $result->actions as $language => $action ) {
 			WP_CLI::log( sprintf( /* translators: 1: language code, 2: "inserted" or "replaced". */ __( '%1$s: %2$s', 'wp-scatter-elsewhere' ), $language, $action ) );
+		}
+
+		foreach ( $result->removed as $language => $count ) {
+			WP_CLI::log( sprintf( /* translators: 1: language code, 2: number of tracks. */ __( '%1$s: %2$d automatic track(s) deleted', 'wp-scatter-elsewhere' ), $language, $count ) );
 		}
 
 		if ( $result->hasErrors() ) {

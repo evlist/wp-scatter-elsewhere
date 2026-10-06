@@ -84,7 +84,7 @@ class SettingsPage {
 		$subtitleFormat = isset( $_POST['subtitle_format'] ) ? sanitize_key( wp_unslash( $_POST['subtitle_format'] ) ) : '';
 
 		try {
-			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat );
+			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat, isset( $_POST['remove_auto_captions'] ) );
 		} catch ( InvalidArgumentException $e ) {
 			$this->redirectWithError( $e->getMessage() );
 		}
@@ -312,6 +312,16 @@ class SettingsPage {
 							<option value="srt" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_SRT ); ?>><?php echo esc_html__( 'SubRip (SRT), converted from WebVTT', 'wp-scatter-elsewhere' ); ?></option>
 							<option value="vtt" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_VTT ); ?>><?php echo esc_html__( 'WebVTT, sent as it is', 'wp-scatter-elsewhere' ); ?></option>
 						</select>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php echo esc_html__( 'Automatic captions', 'wp-scatter-elsewhere' ); ?></th>
+					<td>
+						<label for="wpse-remove-auto-captions">
+							<input type="checkbox" id="wpse-remove-auto-captions" name="remove_auto_captions" value="1" <?php checked( $settings->removesAutomaticCaptions() ); ?> />
+							<?php echo esc_html__( 'Delete the automatic captions of a language when subtitles are sent for it', 'wp-scatter-elsewhere' ); ?>
+						</label>
+						<p class="description"><?php echo esc_html__( 'The deletion cannot be undone from this plugin. YouTube may refuse it.', 'wp-scatter-elsewhere' ); ?></p>
 					</td>
 				</tr>
 			</table>
