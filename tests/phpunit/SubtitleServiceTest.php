@@ -16,6 +16,7 @@ class SubtitleServiceTest extends TestCase {
 
 	private const VTT = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nBonjour\n";
 	private const SRT = "1\n00:00:01,000 --> 00:00:02,000\nBonjour\n";
+	private const SBV = "0:00:01.000,0:00:02.000\nBonjour\n";
 
 	/** @var array<int, array{method: string, url: string, headers: array<string, string>, body: string}> */
 	private array $requests = [];
@@ -34,7 +35,7 @@ class SubtitleServiceTest extends TestCase {
 		return [ 'status' => 200, 'headers' => [], 'body' => '{}' ];
 	}
 
-	private function service( string $format = 'srt' ): SubtitleService {
+	private function service( string $format = 'sbv' ): SubtitleService {
 		$tokens = new AccessTokenProvider(
 			new YouTubeSettings( static fn(): array => [ 'refresh_token' => 'r', 'status' => 'connected' ], static function ( array $v ): void {} ),
 			new OAuthClient( 'id', 'secret', 'https://example.org/cb', static fn(): array => [ 'status' => 200, 'body' => [ 'access_token' => 'tok', 'expires_in' => 3600 ] ] ),
@@ -81,8 +82,9 @@ class SubtitleServiceTest extends TestCase {
 		$this->assertSame( 'https://www.googleapis.com/upload/youtube/v3/captions?uploadType=multipart&part=snippet', $insert['url'] );
 		$this->assertSame( 'multipart/related; boundary=BOUND', $insert['headers']['Content-Type'] );
 		$this->assertStringContainsString( '{"snippet":{"videoId":"vid","language":"fr","isDraft":false}}', $insert['body'] );
-		$this->assertStringContainsString( self::SRT, $insert['body'] );
+		$this->assertStringContainsString( self::SBV, $insert['body'] );
 		$this->assertStringNotContainsString( 'WEBVTT', $insert['body'] );
+		$this->assertStringNotContainsString( '-->', $insert['body'] );
 	}
 
 	public function test_replaces_the_track_of_a_language_youtube_already_has(): void {
@@ -102,6 +104,14 @@ class SubtitleServiceTest extends TestCase {
 
 		$this->assertSame( [ 'fr' => SubtitleResult::INSERTED ], $result->actions );
 		$this->assertSame( 'POST', $this->requests[1]['method'] );
+	}
+
+	public function test_converts_to_srt_when_asked(): void {
+		$this->responses = [ $this->list( [] ) ];
+
+		$this->service( 'srt' )->sync( 'vid', self::tracks( 'fr' ) );
+
+		$this->assertStringContainsString( self::SRT, $this->requests[1]['body'] );
 	}
 
 	public function test_sends_the_file_as_it_is_when_the_format_is_vtt(): void {

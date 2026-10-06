@@ -26,10 +26,11 @@ class UploadSettings {
 
 	public const LICENSE_VALUES = [ self::LICENSE_YOUTUBE, self::LICENSE_CREATIVE_COMMON ];
 
+	public const SUBTITLE_FORMAT_SBV = 'sbv';
 	public const SUBTITLE_FORMAT_SRT = 'srt';
 	public const SUBTITLE_FORMAT_VTT = 'vtt';
 
-	public const SUBTITLE_FORMAT_VALUES = [ self::SUBTITLE_FORMAT_SRT, self::SUBTITLE_FORMAT_VTT ];
+	public const SUBTITLE_FORMAT_VALUES = [ self::SUBTITLE_FORMAT_SBV, self::SUBTITLE_FORMAT_SRT, self::SUBTITLE_FORMAT_VTT ];
 
 	/**
 	 * @var Closure(): mixed
@@ -86,7 +87,7 @@ class UploadSettings {
 	public function subtitleFormat(): string {
 		$value = $this->stored( 'subtitle_format' );
 
-		return is_string( $value ) && in_array( $value, self::SUBTITLE_FORMAT_VALUES, true ) ? $value : self::SUBTITLE_FORMAT_SRT;
+		return is_string( $value ) && in_array( $value, self::SUBTITLE_FORMAT_VALUES, true ) ? $value : self::SUBTITLE_FORMAT_SBV;
 	}
 
 	public function sendsRecordingDate(): bool {
@@ -101,7 +102,7 @@ class UploadSettings {
 	 * @param string $language Empty to derive the language from the site language.
 	 * @throws InvalidArgumentException When a value is invalid; nothing is saved.
 	 */
-	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SRT ): void {
+	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV ): void {
 		$language = trim( $language );
 
 		if ( ! self::isValidPrivacy( $privacy ) ) {
@@ -117,7 +118,7 @@ class UploadSettings {
 		}
 
 		if ( ! in_array( $subtitleFormat, self::SUBTITLE_FORMAT_VALUES, true ) ) {
-			throw new InvalidArgumentException( __( 'The subtitle format must be srt or vtt.', 'wp-scatter-elsewhere' ) );
+			throw new InvalidArgumentException( __( 'The subtitle format must be sbv, srt or vtt.', 'wp-scatter-elsewhere' ) );
 		}
 
 		( $this->saver )(

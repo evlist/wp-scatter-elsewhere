@@ -55,4 +55,37 @@ class SubtitleConverterTest extends TestCase {
 		$this->assertSame( '', $this->convert( "WEBVTT\n" ) );
 		$this->assertSame( '', $this->convert( "not subtitles\n\nat all" ) );
 	}
+
+	private function sbv( string $vtt ): string {
+		return ( new SubtitleConverter() )->vttToSbv( $vtt );
+	}
+
+	public function test_sbv_has_the_youtube_layout(): void {
+		$vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:04.500\nBonjour à tous.\n\n00:00:05.000 --> 00:00:08.250\nPremière ligne\nDeuxième ligne\n";
+
+		$this->assertSame(
+			"0:00:01.000,0:00:04.500\nBonjour à tous.\n\n0:00:05.000,0:00:08.250\nPremière ligne\nDeuxième ligne\n",
+			$this->sbv( $vtt )
+		);
+	}
+
+	public function test_sbv_times_have_an_unpadded_hour_and_three_millisecond_digits(): void {
+		$vtt = "WEBVTT\n\n00:01.5 --> 12:34.56\nA\n\n01:02:03.004 --> 10:00:00.999\nB\n";
+
+		$this->assertSame( "0:00:01.500,0:12:34.560\nA\n\n1:02:03.004,10:00:00.999\nB\n", $this->sbv( $vtt ) );
+	}
+
+	public function test_sbv_has_no_formatting_and_no_cue_numbers(): void {
+		$vtt = "WEBVTT\n\n1\n00:00:01.000 --> 00:00:02.000 align:start\n<v Eric>Salut <i>toi</i> &amp; <b>vous</b></v>\n<c.yellow>Jaune</c> <00:00:01.500>mot\n";
+
+		$this->assertSame( "0:00:01.000,0:00:02.000\nSalut toi & vous\nJaune mot\n", $this->sbv( $vtt ) );
+	}
+
+	public function test_sbv_drops_header_notes_styles_and_empty_cues(): void {
+		$vtt = "\xEF\xBB\xBFWEBVTT\r\nKind: captions\r\n\r\nNOTE comment\r\n\r\nSTYLE\r\n::cue { color: red }\r\n\r\n00:00:01.000 --> 00:00:02.000\r\n\r\n\r\n00:00:03.000 --> 00:00:04.000\r\nReste\r\n";
+
+		$this->assertSame( "0:00:03.000,0:00:04.000\nReste\n", $this->sbv( $vtt ) );
+		$this->assertSame( '', $this->sbv( '' ) );
+		$this->assertSame( '', $this->sbv( "WEBVTT\n" ) );
+	}
 }

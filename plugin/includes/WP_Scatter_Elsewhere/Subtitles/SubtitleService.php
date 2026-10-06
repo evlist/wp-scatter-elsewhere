@@ -96,13 +96,15 @@ final class SubtitleService {
 			return null;
 		}
 
-		if ( 'vtt' === $this->settings->subtitleFormat() ) {
+		$format = $this->settings->subtitleFormat();
+
+		if ( UploadSettings::SUBTITLE_FORMAT_VTT === $format ) {
 			return $raw;
 		}
 
-		$srt = $this->converter->vttToSrt( $raw );
+		$converted = UploadSettings::SUBTITLE_FORMAT_SRT === $format ? $this->converter->vttToSrt( $raw ) : $this->converter->vttToSbv( $raw );
 
-		return '' === $srt ? null : $srt;
+		return '' === $converted ? null : $converted;
 	}
 
 	/**

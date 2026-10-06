@@ -308,6 +308,7 @@ class SettingsPage {
 					<th scope="row"><label for="wpse-subtitle-format"><?php echo esc_html__( 'Subtitle format', 'wp-scatter-elsewhere' ); ?></label></th>
 					<td>
 						<select id="wpse-subtitle-format" name="subtitle_format">
+							<option value="sbv" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_SBV ); ?>><?php echo esc_html__( 'SubViewer (SBV, the YouTube format), converted from WebVTT', 'wp-scatter-elsewhere' ); ?></option>
 							<option value="srt" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_SRT ); ?>><?php echo esc_html__( 'SubRip (SRT), converted from WebVTT', 'wp-scatter-elsewhere' ); ?></option>
 							<option value="vtt" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_VTT ); ?>><?php echo esc_html__( 'WebVTT, sent as it is', 'wp-scatter-elsewhere' ); ?></option>
 						</select>
