@@ -62,10 +62,11 @@ final class CaptionClient {
 	}
 
 	/**
+	 * @param string $name Name of the track; YouTube refuses a track without one (invalidMetadata).
 	 * @throws CaptionException
 	 */
-	public function insert( string $youtubeId, string $language, string $content ): void {
-		$this->upload( 'POST', [ 'snippet' => [ 'videoId' => $youtubeId, 'language' => $language, 'isDraft' => false ] ], $content );
+	public function insert( string $youtubeId, string $language, string $name, string $content ): void {
+		$this->upload( 'POST', [ 'snippet' => [ 'videoId' => $youtubeId, 'language' => $language, 'name' => $name, 'isDraft' => false ] ], $content );
 	}
 
 	/**

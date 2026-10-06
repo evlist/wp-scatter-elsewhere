@@ -123,10 +123,10 @@ class UploadServiceTest extends TestCase {
 		return new DetectedVideo( $id, $file, $reason, [ 'https://example.org/uploads/a.mp4' ], $subtitles, null );
 	}
 
-	private function track( string $url, ?string $language, ?string $path = '/uploads/a-fr.vtt' ): SubtitleTrack {
+	private function track( string $url, ?string $language, ?string $path = '/uploads/a-fr.vtt', ?string $label = null ): SubtitleTrack {
 		$file = null === $path ? null : new LocalFile( $path, $url, 'text/vtt', 10, null );
 
-		return new SubtitleTrack( $url, $language, null, $file, null === $file ? 'not local' : null );
+		return new SubtitleTrack( $url, $language, $label, $file, null === $file ? 'not local' : null );
 	}
 
 	public function test_enqueue_creates_a_private_job_and_schedules_it(): void {
@@ -447,7 +447,7 @@ class UploadServiceTest extends TestCase {
 			null,
 			null,
 			[
-				$this->track( 'u1', 'fr', '/uploads/a-fr.vtt' ),
+				$this->track( 'u1', 'fr', '/uploads/a-fr.vtt', 'FR' ),
 				$this->track( 'u2', 'fr', '/uploads/other-fr.vtt' ),
 				$this->track( 'u3', 'en', '/uploads/a-en.vtt' ),
 				$this->track( 'u4', null, '/uploads/a-xx.vtt' ),
@@ -458,7 +458,7 @@ class UploadServiceTest extends TestCase {
 		$job = $this->service()->enqueue( $video, 7, $this->metadata() );
 
 		$this->assertSame(
-			[ [ 'language' => 'fr', 'path' => '/uploads/a-fr.vtt' ], [ 'language' => 'en', 'path' => '/uploads/a-en.vtt' ] ],
+			[ [ 'language' => 'fr', 'path' => '/uploads/a-fr.vtt', 'name' => 'FR' ], [ 'language' => 'en', 'path' => '/uploads/a-en.vtt', 'name' => '' ] ],
 			$job->subtitles()
 		);
 	}

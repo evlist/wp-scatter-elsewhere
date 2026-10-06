@@ -174,7 +174,7 @@ final class Command {
 		$tracks = [];
 		foreach ( $video->subtitles as $track ) {
 			if ( $track->isUsable() ) {
-				$tracks[] = [ 'language' => (string) $track->language, 'path' => $track->file->path ];
+				$tracks[] = [ 'language' => (string) $track->language, 'path' => $track->file->path, 'name' => (string) $track->label ];
 			} else {
 				WP_CLI::warning( sprintf( /* translators: 1: subtitle address, 2: reason. */ __( 'Skipped %1$s: %2$s', 'wp-scatter-elsewhere' ), $track->url, (string) $track->reason ) );
 			}

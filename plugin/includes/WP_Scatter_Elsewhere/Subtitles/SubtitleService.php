@@ -40,7 +40,7 @@ final class SubtitleService {
 	 *
 	 * A problem with one track does not stop the others; a quota error stops everything.
 	 *
-	 * @param array<int, array{language: string, path: string}> $tracks
+	 * @param array<int, array{language: string, path: string, name?: string}> $tracks The name is the one shown by YouTube for the track; the language code when empty.
 	 */
 	public function sync( string $youtubeId, array $tracks ): SubtitleResult {
 		$tracks = $this->onePerLanguage( $tracks );
@@ -72,7 +72,7 @@ final class SubtitleService {
 					$this->client->replace( $existing[ $language ], $content );
 					$actions[ $language ] = SubtitleResult::REPLACED;
 				} else {
-					$this->client->insert( $youtubeId, $language, $content );
+					$this->client->insert( $youtubeId, $language, '' !== trim( (string) ( $track['name'] ?? '' ) ) ? trim( (string) $track['name'] ) : $language, $content );
 					$actions[ $language ] = SubtitleResult::INSERTED;
 				}
 			} catch ( CaptionException $e ) {
@@ -108,8 +108,8 @@ final class SubtitleService {
 	}
 
 	/**
-	 * @param array<int, array{language: string, path: string}> $tracks
-	 * @return array<int, array{language: string, path: string}>
+	 * @param array<int, array{language: string, path: string, name?: string}> $tracks
+	 * @return array<int, array{language: string, path: string, name?: string}>
 	 */
 	private function onePerLanguage( array $tracks ): array {
 		$unique = [];

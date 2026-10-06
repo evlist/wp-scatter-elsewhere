@@ -219,13 +219,13 @@ final class UploadService {
 	/**
 	 * The usable subtitle tracks of a video, one per language.
 	 *
-	 * @return array<int, array{language: string, path: string}>
+	 * @return array<int, array{language: string, path: string, name: string}>
 	 */
 	private function subtitleTracks( DetectedVideo $video ): array {
 		$tracks = [];
 		foreach ( $video->subtitles as $track ) {
 			if ( $track->isUsable() ) {
-				$tracks[ (string) $track->language ] ??= [ 'language' => (string) $track->language, 'path' => $track->file->path ];
+				$tracks[ (string) $track->language ] ??= [ 'language' => (string) $track->language, 'path' => $track->file->path, 'name' => (string) $track->label ];
 			}
 		}
 

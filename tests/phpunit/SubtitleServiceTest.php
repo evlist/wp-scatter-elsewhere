@@ -81,10 +81,19 @@ class SubtitleServiceTest extends TestCase {
 		$this->assertSame( 'POST', $insert['method'] );
 		$this->assertSame( 'https://www.googleapis.com/upload/youtube/v3/captions?uploadType=multipart&part=snippet', $insert['url'] );
 		$this->assertSame( 'multipart/related; boundary=BOUND', $insert['headers']['Content-Type'] );
-		$this->assertStringContainsString( '{"snippet":{"videoId":"vid","language":"fr","isDraft":false}}', $insert['body'] );
+		$this->assertStringContainsString( '{"snippet":{"videoId":"vid","language":"fr","name":"fr","isDraft":false}}', $insert['body'] );
 		$this->assertStringContainsString( self::SBV, $insert['body'] );
 		$this->assertStringNotContainsString( 'WEBVTT', $insert['body'] );
 		$this->assertStringNotContainsString( '-->', $insert['body'] );
+	}
+
+	public function test_the_track_gets_the_name_given_or_else_its_language_code(): void {
+		$this->responses = [ $this->list( [] ) ];
+
+		$this->service()->sync( 'vid', [ [ 'language' => 'fr', 'path' => '/u/a-fr.vtt', 'name' => 'Français' ], [ 'language' => 'en', 'path' => '/u/a-en.vtt', 'name' => '  ' ] ] );
+
+		$this->assertStringContainsString( '"language":"fr","name":"Français"', $this->requests[1]['body'] );
+		$this->assertStringContainsString( '"language":"en","name":"en"', $this->requests[2]['body'] );
 	}
 
 	public function test_replaces_the_track_of_a_language_youtube_already_has(): void {

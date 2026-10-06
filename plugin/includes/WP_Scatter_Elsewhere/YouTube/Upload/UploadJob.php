@@ -177,7 +177,7 @@ final class UploadJob {
 	}
 
 	/**
-	 * @return array<int, array{language: string, path: string}>
+	 * @return array<int, array{language: string, path: string, name?: string}>
 	 */
 	public function subtitles(): array {
 		return $this->data['subtitles'];

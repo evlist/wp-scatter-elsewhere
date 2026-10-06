@@ -24,7 +24,8 @@ final class ApiErrors {
 
 	public static function describe( int $status, string $body ): string {
 		$data    = json_decode( $body, true );
-		$message = is_array( $data ) ? (string) ( $data['error']['message'] ?? '' ) : '';
+		// Messages of Google may contain HTML such as <code>.
+		$message = is_array( $data ) ? strip_tags( (string) ( $data['error']['message'] ?? '' ) ) : '';
 
 		return sprintf(
 			/* translators: 1: HTTP status code, 2: error reason code (may be empty), 3: error message (may be empty). */
