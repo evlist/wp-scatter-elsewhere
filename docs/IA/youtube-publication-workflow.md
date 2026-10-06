@@ -60,11 +60,10 @@ or YouTube Studio:
   readable for end users and is not planned. Initial placeholders: `title`,
   `excerpt`, `permalink`, `date:<format>`, `author`, plus term lists such as
   `categories` and `tags`.
-- **Term rules (playlists and keywords):** an editable table in the settings
-  maps a taxonomy term (categories, tags, any taxonomy) to an action: add the
-  video to a given playlist, or add a keyword. A term absent from the table is
-  ignored. The same mechanism serves both actions, so new actions can be added
-  later.
+- **Term rules (playlists and keywords):** an editable table in the settings, one row
+  per taxonomy term (categories, tags, any taxonomy), with an optional playlist and an
+  optional keyword: a row can produce both. A term absent from the table is ignored.
+  See [slice 007](../slices/007-term-rules.md).
 - **Finding videos and subtitles:** by reading the video elements of the
   rendered public page of the post, not by a naming convention on attachments.
   `<video>` / `<source>` give the files, `<track kind="subtitles"
