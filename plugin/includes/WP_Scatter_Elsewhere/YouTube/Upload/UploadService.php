@@ -10,6 +10,7 @@ use WP_Scatter_Elsewhere\Detection\DetectedVideo;
 use WP_Scatter_Elsewhere\Publication\Publication;
 use WP_Scatter_Elsewhere\Publication\PublicationStore;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
+use WP_Scatter_Elsewhere\YouTube\VideoMetadata;
 
 /**
  * Creates, runs, schedules and retries upload jobs. WordPress-independent: scheduling is injected.
@@ -64,11 +65,15 @@ final class UploadService {
 	 * @param bool    $force   Upload even when the video already has a YouTube video.
 	 * @throws UploadException When the job cannot be created.
 	 */
-	public function enqueue( DetectedVideo $video, int $postId, string $title, string $description, ?string $privacy = null, bool $force = false ): UploadJob {
+	public function enqueue( DetectedVideo $video, int $postId, VideoMetadata $metadata, ?string $privacy = null, bool $force = false ): UploadJob {
 		$privacy ??= $this->settings->defaultPrivacy();
 
 		if ( ! UploadSettings::isValidPrivacy( $privacy ) ) {
 			throw new UploadException( __( 'The privacy must be private, unlisted or public.', 'wp-scatter-elsewhere' ) );
+		}
+
+		if ( ! UploadSettings::isValidLicense( $metadata->license ) ) {
+			throw new UploadException( __( 'The license must be youtube or creativeCommon.', 'wp-scatter-elsewhere' ) );
 		}
 
 		if ( null === $video->file ) {
@@ -109,8 +114,12 @@ final class UploadService {
 				'file_path'   => $video->file->path,
 				'mime_type'   => $video->file->mimeType,
 				'size'        => $video->file->size,
-				'title'       => $title,
-				'description' => $description,
+				'title'       => $metadata->title,
+				'description' => $metadata->description,
+				'category_id' => $metadata->categoryId,
+				'language'    => $metadata->language,
+				'license'     => $metadata->license,
+				'recording_date' => $metadata->recordingDate,
 				'privacy'     => $privacy,
 				'status'      => UploadJob::STATUS_QUEUED,
 				'created_at'  => $now,

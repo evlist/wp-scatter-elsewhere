@@ -78,10 +78,12 @@ class SettingsPage {
 	public function handleSaveUploadSettings(): void {
 		$this->guard( self::ACTION_UPLOAD );
 
-		$privacy = isset( $_POST['default_privacy'] ) ? sanitize_key( wp_unslash( $_POST['default_privacy'] ) ) : '';
+		$privacy  = isset( $_POST['default_privacy'] ) ? sanitize_key( wp_unslash( $_POST['default_privacy'] ) ) : '';
+		$license  = isset( $_POST['default_license'] ) ? sanitize_text_field( wp_unslash( $_POST['default_license'] ) ) : '';
+		$language = isset( $_POST['language'] ) ? sanitize_text_field( wp_unslash( $_POST['language'] ) ) : '';
 
 		try {
-			WordPressFactory::uploadSettings()->saveDefaultPrivacy( $privacy );
+			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ) );
 		} catch ( InvalidArgumentException $e ) {
 			$this->redirectWithError( $e->getMessage() );
 		}
@@ -247,8 +249,13 @@ class SettingsPage {
 	}
 
 	private function renderUploadSettings(): void {
-		$current = WordPressFactory::uploadSettings()->defaultPrivacy();
-		$labels  = [
+		$settings = WordPressFactory::uploadSettings();
+		$current  = $settings->defaultPrivacy();
+		$licenses = [
+			UploadSettings::LICENSE_YOUTUBE         => __( 'Standard YouTube license', 'wp-scatter-elsewhere' ),
+			UploadSettings::LICENSE_CREATIVE_COMMON => __( 'Creative Commons (reuse allowed)', 'wp-scatter-elsewhere' ),
+		];
+		$labels   = [
 			UploadSettings::PRIVACY_PRIVATE  => __( 'Private (only you can see it)', 'wp-scatter-elsewhere' ),
 			UploadSettings::PRIVACY_UNLISTED => __( 'Unlisted (anyone with the link)', 'wp-scatter-elsewhere' ),
 			UploadSettings::PRIVACY_PUBLIC   => __( 'Public', 'wp-scatter-elsewhere' ),
@@ -268,6 +275,32 @@ class SettingsPage {
 							<?php endforeach; ?>
 						</select>
 						<p class="description"><?php echo esc_html__( 'Videos are private by default so that tests never show on your channel. Google may keep videos private whatever you choose until your Google Cloud project has passed its API audit.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-default-license"><?php echo esc_html__( 'Default license', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<select id="wpse-default-license" name="default_license">
+							<?php foreach ( $licenses as $value => $label ) : ?>
+								<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $settings->defaultLicense(), $value ); ?>><?php echo esc_html( $label ); ?></option>
+							<?php endforeach; ?>
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-language"><?php echo esc_html__( 'Video language', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<input type="text" id="wpse-language" name="language" class="small-text code" value="<?php echo esc_attr( $settings->language() ); ?>" />
+						<p class="description"><?php echo esc_html__( 'A language code such as fr, en or pt-BR. Leave empty to use the language of the site.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php echo esc_html__( 'Recording date', 'wp-scatter-elsewhere' ); ?></th>
+					<td>
+						<label for="wpse-recording-date">
+							<input type="checkbox" id="wpse-recording-date" name="send_recording_date" value="1" <?php checked( $settings->sendsRecordingDate() ); ?> />
+							<?php echo esc_html__( 'Send the date of the post as the recording date of the video', 'wp-scatter-elsewhere' ); ?>
+						</label>
 					</td>
 				</tr>
 			</table>

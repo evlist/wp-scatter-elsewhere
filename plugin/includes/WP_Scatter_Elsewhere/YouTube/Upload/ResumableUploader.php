@@ -19,7 +19,8 @@ use WP_Scatter_Elsewhere\YouTube\ReauthorizationRequiredException;
  */
 final class ResumableUploader {
 
-	public const INIT_URL = 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status';
+	/** The parts of the video sent in the request body are appended to it, separated by commas. */
+	public const INIT_ENDPOINT = 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=';
 
 	/** Chunks must be a multiple of 256 KiB, except the last one. */
 	public const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024;
@@ -118,31 +119,43 @@ final class ResumableUploader {
 	 * Opens the upload session. On failure, returns the failed or retrying job.
 	 */
 	private function openSession( UploadJob $job, string $token ): UploadJob {
-		// This class does not depend on WordPress, hence json_encode() rather than wp_json_encode().
-		$body = (string) json_encode( // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
-			[
-				'snippet' => [
-					'title'       => $job->title(),
-					'description' => $job->description(),
-					'categoryId'  => $job->categoryId(),
-				],
-				'status'  => [
-					'privacyStatus'           => $job->privacy(),
-					'selfDeclaredMadeForKids' => false,
-				],
+		$snippet = [
+			'title'       => $job->title(),
+			'description' => $job->description(),
+			'categoryId'  => $job->categoryId(),
+		];
+		if ( null !== $job->language() ) {
+			$snippet['defaultLanguage']      = $job->language();
+			$snippet['defaultAudioLanguage'] = $job->language();
+		}
+
+		$resource = [
+			'snippet' => $snippet,
+			'status'  => [
+				'privacyStatus'           => $job->privacy(),
+				'selfDeclaredMadeForKids' => false,
+				'license'                 => $job->license(),
 			],
-			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-		);
+		];
+		$parts    = [ 'snippet', 'status' ];
+
+		if ( null !== $job->recordingDate() ) {
+			$resource['recordingDetails'] = [ 'recordingDate' => $job->recordingDate() ];
+			$parts[]                      = 'recordingDetails';
+		}
+
+		// This class does not depend on WordPress, hence json_encode() rather than wp_json_encode().
+		$body = (string) json_encode( $resource, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode
 
 		$response = $this->send(
 			'POST',
-			self::INIT_URL,
+			self::INIT_ENDPOINT . implode( ',', $parts ),
 			$this->headers(
 				$token,
 				[
-					'Content-Type'           => 'application/json; charset=UTF-8',
+					'Content-Type'            => 'application/json; charset=UTF-8',
 					'X-Upload-Content-Length' => (string) $job->size(),
-					'X-Upload-Content-Type'  => $job->mimeType(),
+					'X-Upload-Content-Type'   => $job->mimeType(),
 				]
 			),
 			$body

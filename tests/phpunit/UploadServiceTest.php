@@ -15,6 +15,7 @@ use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJobStore;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
+use WP_Scatter_Elsewhere\YouTube\VideoMetadata;
 
 class UploadServiceTest extends TestCase {
 
@@ -85,6 +86,10 @@ class UploadServiceTest extends TestCase {
 		);
 	}
 
+	private function metadata( string $license = 'youtube' ): VideoMetadata {
+		return new VideoMetadata( 'Title', 'Description', 'fr', $license, '2026-10-05T12:00:00Z' );
+	}
+
 	private function video( string $id = 'v1', ?LocalFile $file = null, ?string $reason = null ): DetectedVideo {
 		$file ??= new LocalFile( '/uploads/a.mp4', 'https://example.org/uploads/a.mp4', 'video/mp4', strlen( self::CONTENT ), 12 );
 
@@ -92,11 +97,17 @@ class UploadServiceTest extends TestCase {
 	}
 
 	public function test_enqueue_creates_a_private_job_and_schedules_it(): void {
-		$job = $this->service()->enqueue( $this->video(), 7, 'Title', 'Description' );
+		$job = $this->service()->enqueue( $this->video(), 7, $this->metadata() );
 
 		$this->assertSame( 'job1', $job->id() );
 		$this->assertSame( UploadJob::STATUS_QUEUED, $job->status() );
 		$this->assertSame( 'private', $job->privacy() );
+		$this->assertSame( 'Title', $job->title() );
+		$this->assertSame( 'Description', $job->description() );
+		$this->assertSame( 'fr', $job->language() );
+		$this->assertSame( 'youtube', $job->license() );
+		$this->assertSame( '2026-10-05T12:00:00Z', $job->recordingDate() );
+		$this->assertSame( '22', $job->categoryId() );
 		$this->assertSame( 7, $job->postId() );
 		$this->assertSame( 'v1', $job->videoId() );
 		$this->assertSame( '/uploads/a.mp4', $job->filePath() );
@@ -109,19 +120,20 @@ class UploadServiceTest extends TestCase {
 	public function test_enqueue_uses_the_default_privacy_of_the_settings_or_the_explicit_one(): void {
 		$this->settingsValue = [ 'default_privacy' => 'unlisted' ];
 
-		$this->assertSame( 'unlisted', $this->service()->enqueue( $this->video( 'a' ), 1, 'T', 'D' )->privacy() );
-		$this->assertSame( 'public', $this->service()->enqueue( $this->video( 'b' ), 1, 'T', 'D', 'public' )->privacy() );
+		$this->assertSame( 'unlisted', $this->service()->enqueue( $this->video( 'a' ), 1, $this->metadata() )->privacy() );
+		$this->assertSame( 'public', $this->service()->enqueue( $this->video( 'b' ), 1, $this->metadata(), 'public' )->privacy() );
 	}
 
 	public function test_enqueue_refuses_invalid_requests(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 
 		$cases = [
-			'privacy'     => fn() => $service->enqueue( $this->video( 'x' ), 7, 'T', 'D', 'everyone' ),
-			'not uploadable' => fn() => $service->enqueue( new DetectedVideo( 'x', null, 'external', [], [], null ), 7, 'T', 'D' ),
-			'empty file'  => fn() => $service->enqueue( $this->video( 'x', new LocalFile( '/a', 'u', 'video/mp4', 0, null ) ), 7, 'T', 'D' ),
-			'duplicate'   => fn() => $service->enqueue( $this->video(), 7, 'T', 'D' ),
+			'privacy'     => fn() => $service->enqueue( $this->video( 'x' ), 7, $this->metadata(), 'everyone' ),
+			'not uploadable' => fn() => $service->enqueue( new DetectedVideo( 'x', null, 'external', [], [], null ), 7, $this->metadata() ),
+			'empty file'  => fn() => $service->enqueue( $this->video( 'x', new LocalFile( '/a', 'u', 'video/mp4', 0, null ) ), 7, $this->metadata() ),
+			'license'     => fn() => $service->enqueue( $this->video( 'y' ), 7, $this->metadata( 'cc-by' ) ),
+			'duplicate'   => fn() => $service->enqueue( $this->video(), 7, $this->metadata() ),
 		];
 
 		foreach ( $cases as $name => $call ) {
@@ -138,15 +150,15 @@ class UploadServiceTest extends TestCase {
 
 	public function test_a_finished_job_does_not_block_another_video_of_the_post(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 
-		$this->assertSame( 'job2', $service->enqueue( $this->video( 'v2' ), 7, 'T', 'D' )->id() );
+		$this->assertSame( 'job2', $service->enqueue( $this->video( 'v2' ), 7, $this->metadata() )->id() );
 	}
 
 	public function test_a_completed_upload_is_recorded_on_the_post(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D', 'unlisted' );
+		$service->enqueue( $this->video(), 7, $this->metadata(), 'unlisted' );
 
 		$service->process( 'job1', 600 );
 
@@ -159,7 +171,7 @@ class UploadServiceTest extends TestCase {
 	public function test_an_unfinished_or_failed_upload_records_nothing(): void {
 		$this->server->script = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
 		$service              = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 
 		$service->process( 'job1', 600 );
 
@@ -168,11 +180,11 @@ class UploadServiceTest extends TestCase {
 
 	public function test_a_video_already_on_youtube_cannot_be_uploaded_again(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 
 		try {
-			$service->enqueue( $this->video(), 7, 'T', 'D' );
+			$service->enqueue( $this->video(), 7, $this->metadata() );
 			$this->fail( 'Expected an UploadException.' );
 		} catch ( UploadException $e ) {
 			$this->assertStringContainsString( 'https://www.youtube.com/watch?v=vid123', $e->getMessage() );
@@ -183,24 +195,24 @@ class UploadServiceTest extends TestCase {
 
 	public function test_a_job_completed_before_publications_were_recorded_also_blocks_a_new_upload(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 		$this->meta = [];
 
 		$this->assertSame( 'vid123', $service->publicationFor( 7, 'v1' )->youtubeId );
 		$this->expectException( UploadException::class );
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 	}
 
 	public function test_force_uploads_again_and_replaces_the_record(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 		$this->server = new FakeUploadServer( strlen( self::CONTENT ) );
 		$this->server->script = [ null, null, null, [ 'status' => 200, 'headers' => [], 'body' => '{"id":"second12345"}' ] ];
 		$service = $this->service();
 
-		$job = $service->enqueue( $this->video(), 7, 'T', 'D', null, true );
+		$job = $service->enqueue( $this->video(), 7, $this->metadata(), null, true );
 		$service->process( $job->id(), 600 );
 
 		$this->assertSame( 'second12345', $this->meta[7]['v1']['youtube_id'] );
@@ -216,7 +228,7 @@ class UploadServiceTest extends TestCase {
 		$this->assertSame( [ 'v1' => [ 'youtube_id' => 'abcDEF_-123', 'privacy' => 'public', 'published_at' => 1000, 'job_id' => null ] ], $this->meta[7] );
 
 		$this->expectException( UploadException::class );
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 	}
 
 	public function test_link_rejects_invalid_ids_and_privacy(): void {
@@ -236,7 +248,7 @@ class UploadServiceTest extends TestCase {
 
 	public function test_process_uploads_and_does_not_reschedule_a_finished_job(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$this->scheduled = [];
 
 		$job = $service->process( 'job1', 600 );
@@ -251,7 +263,7 @@ class UploadServiceTest extends TestCase {
 	public function test_process_reschedules_an_unfinished_job_immediately(): void {
 		$this->server->putDelay = 10;
 		$service                = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$this->scheduled = [];
 
 		$job = $service->process( 'job1', 15 );
@@ -263,7 +275,7 @@ class UploadServiceTest extends TestCase {
 	public function test_process_reschedules_a_job_in_retry_at_its_retry_time(): void {
 		$this->server->script = [ null, [ 'status' => 503, 'headers' => [], 'body' => '' ] ];
 		$service              = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$this->scheduled = [];
 
 		$job = $service->process( 'job1', 600 );
@@ -275,7 +287,7 @@ class UploadServiceTest extends TestCase {
 	public function test_process_postpones_a_retry_whose_delay_has_not_elapsed(): void {
 		$this->server->script = [ null, [ 'status' => 503, 'headers' => [], 'body' => '' ] ];
 		$service              = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 		$this->scheduled = [];
 		$this->server->requests = [];
@@ -293,7 +305,7 @@ class UploadServiceTest extends TestCase {
 
 	public function test_a_locked_job_is_not_run_twice(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$this->stored['job1']['locked_until'] = $this->server->now + 100;
 
 		$job = $service->process( 'job1', 600 );
@@ -307,7 +319,7 @@ class UploadServiceTest extends TestCase {
 
 	public function test_the_job_is_locked_during_the_run(): void {
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$seen = null;
 		$this->server->script = [ function () use ( &$seen ): array {
 			$seen = $this->stored['job1']['locked_until'];
@@ -325,7 +337,7 @@ class UploadServiceTest extends TestCase {
 
 		$this->assertNull( $service->process( 'nope', 600 ) );
 
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 		$this->server->requests = [];
 
@@ -338,7 +350,7 @@ class UploadServiceTest extends TestCase {
 			throw new LogicException( 'bug' );
 		} ];
 		$service = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 
 		$job = $service->process( 'job1', 600 );
 
@@ -350,7 +362,7 @@ class UploadServiceTest extends TestCase {
 	public function test_retry_restarts_a_failed_job_with_a_fresh_counter(): void {
 		$this->server->script = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
 		$service              = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$failed = $service->process( 'job1', 600 );
 		$this->assertSame( UploadJob::STATUS_FAILED, $failed->status() );
 		$this->scheduled = [];
@@ -367,7 +379,7 @@ class UploadServiceTest extends TestCase {
 	public function test_retry_of_a_job_with_a_session_resumes_after_asking_youtube(): void {
 		$this->server->script = [ null, [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
 		$service              = $this->service();
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 		$this->stored['job1']['session_uri'] = 'https://upload.example/session1';
 		$this->server->requests              = [];
@@ -389,7 +401,7 @@ class UploadServiceTest extends TestCase {
 			$this->assertNotSame( '', $e->getMessage() );
 		}
 
-		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->enqueue( $this->video(), 7, $this->metadata() );
 		$service->process( 'job1', 600 );
 
 		$this->expectException( UploadException::class );

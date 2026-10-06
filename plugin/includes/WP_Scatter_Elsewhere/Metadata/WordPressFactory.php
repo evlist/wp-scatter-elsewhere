@@ -7,6 +7,7 @@ namespace WP_Scatter_Elsewhere\Metadata;
 use DateTimeImmutable;
 use WP_Post;
 use WP_Scatter_Elsewhere\Settings\MetadataTemplateSettings;
+use WP_Scatter_Elsewhere\YouTube\WordPressFactory as YouTubeFactory;
 
 /**
  * Wires the metadata classes to WordPress. Contains no logic worth testing without WordPress.
@@ -37,6 +38,14 @@ final class WordPressFactory {
 				}
 			),
 			new YouTubeTextNormalizer()
+		);
+	}
+
+	public static function videoMetadataBuilder(): VideoMetadataBuilder {
+		return new VideoMetadataBuilder(
+			self::composer(),
+			YouTubeFactory::uploadSettings(),
+			static fn(): string => (string) get_locale()
 		);
 	}
 

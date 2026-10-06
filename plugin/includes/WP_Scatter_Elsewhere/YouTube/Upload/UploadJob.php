@@ -26,6 +26,9 @@ final class UploadJob {
 		'description'  => '',
 		'privacy'      => 'private',
 		'category_id'  => '22',
+		'language'     => null,
+		'license'      => 'youtube',
+		'recording_date' => null,
 		'status'       => self::STATUS_QUEUED,
 		'session_uri'  => null,
 		'bytes_sent'   => 0,
@@ -116,6 +119,18 @@ final class UploadJob {
 
 	public function categoryId(): string {
 		return $this->data['category_id'];
+	}
+
+	public function language(): ?string {
+		return $this->data['language'];
+	}
+
+	public function license(): string {
+		return $this->data['license'];
+	}
+
+	public function recordingDate(): ?string {
+		return $this->data['recording_date'];
 	}
 
 	public function status(): string {

@@ -42,6 +42,11 @@ wp scatter-elsewhere jobs
 wp scatter-elsewhere retry <job-id> [--now]
 ```
 
+- Language (the site language by default), license (`youtube` by default) and
+  recording date (the date of the post, sent as noon UTC) are sent with the
+  upload. Set them on the settings page. To apply them to a video that is already
+  on YouTube:
+  `wp scatter-elsewhere apply-metadata <post-id> [<video-id>] [--fields=language,license,recording_date]`.
 - **Videos are private by default** (setting *Default privacy*), so tests do not
   show on your channel. Delete test videos in YouTube Studio.
 - To the best of our knowledge, Google keeps the videos uploaded by a project

@@ -18,30 +18,72 @@ class UploadSettingsTest extends TestCase {
 		);
 	}
 
-	public function test_default_privacy_is_private(): void {
-		$this->assertSame( 'private', $this->settings( false )->defaultPrivacy() );
-		$this->assertSame( 'private', $this->settings( [] )->defaultPrivacy() );
-		$this->assertSame( 'private', $this->settings( 'garbage' )->defaultPrivacy() );
-		$this->assertSame( 'private', $this->settings( [ 'default_privacy' => 'everyone' ] )->defaultPrivacy() );
+	public function test_defaults(): void {
+		foreach ( [ false, [], 'garbage' ] as $stored ) {
+			$settings = $this->settings( $stored );
+
+			$this->assertSame( 'private', $settings->defaultPrivacy() );
+			$this->assertSame( 'youtube', $settings->defaultLicense() );
+			$this->assertSame( '', $settings->language() );
+			$this->assertTrue( $settings->sendsRecordingDate() );
+		}
 	}
 
-	public function test_returns_the_stored_privacy(): void {
-		$this->assertSame( 'unlisted', $this->settings( [ 'default_privacy' => 'unlisted' ] )->defaultPrivacy() );
-		$this->assertSame( 'public', $this->settings( [ 'default_privacy' => 'public' ] )->defaultPrivacy() );
+	public function test_invalid_stored_values_fall_back_to_the_defaults(): void {
+		$settings = $this->settings( [ 'default_privacy' => 'everyone', 'default_license' => 'mit', 'language' => 'not a language', 'send_recording_date' => 'yes' ] );
+
+		$this->assertSame( 'private', $settings->defaultPrivacy() );
+		$this->assertSame( 'youtube', $settings->defaultLicense() );
+		$this->assertSame( '', $settings->language() );
+		$this->assertTrue( $settings->sendsRecordingDate() );
 	}
 
-	public function test_saves_a_valid_privacy_only(): void {
-		$settings = $this->settings( [] );
+	public function test_returns_the_stored_values(): void {
+		$settings = $this->settings( [ 'default_privacy' => 'unlisted', 'default_license' => 'creativeCommon', 'language' => 'pt-BR', 'send_recording_date' => false ] );
 
-		$settings->saveDefaultPrivacy( 'unlisted' );
-		$this->assertSame( [ 'default_privacy' => 'unlisted' ], $this->saved );
+		$this->assertSame( 'unlisted', $settings->defaultPrivacy() );
+		$this->assertSame( 'creativeCommon', $settings->defaultLicense() );
+		$this->assertSame( 'pt-BR', $settings->language() );
+		$this->assertFalse( $settings->sendsRecordingDate() );
+	}
 
-		$this->saved = null;
+	public function test_saves_valid_values(): void {
+		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false );
+
+		$this->assertSame(
+			[ 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
+			$this->saved
+		);
+	}
+
+	public function test_an_empty_language_is_valid_and_means_the_site_language(): void {
+		$this->settings( [] )->save( 'private', 'youtube', '', true );
+
+		$this->assertSame( '', $this->saved['language'] );
+	}
+
+	/**
+	 * @dataProvider provideInvalidValues
+	 */
+	public function test_nothing_is_saved_when_a_value_is_invalid( string $privacy, string $license, string $language ): void {
 		try {
-			$settings->saveDefaultPrivacy( 'everyone' );
+			$this->settings( [] )->save( $privacy, $license, $language, true );
 			$this->fail( 'Expected an InvalidArgumentException.' );
 		} catch ( InvalidArgumentException $e ) {
+			$this->assertNotSame( '', $e->getMessage() );
 			$this->assertNull( $this->saved );
 		}
+	}
+
+	/**
+	 * @return array<string, array{string, string, string}>
+	 */
+	public static function provideInvalidValues(): array {
+		return [
+			'privacy'  => [ 'everyone', 'youtube', 'fr' ],
+			'license'  => [ 'private', 'mit', 'fr' ],
+			'language' => [ 'private', 'youtube', 'french language' ],
+			'digits'   => [ 'private', 'youtube', '12' ],
+		];
 	}
 }

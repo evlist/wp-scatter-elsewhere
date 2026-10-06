@@ -101,6 +101,9 @@ class ResumableUploaderTest extends TestCase {
 					'title'       => 'Tour du Mont Blanc',
 					'description' => 'Une belle randonnée.',
 					'privacy'     => 'private',
+					'language'    => 'fr',
+					'license'     => 'creativeCommon',
+					'recording_date' => '2026-10-05T12:00:00Z',
 					'status'      => 'queued',
 				],
 				$changes
@@ -154,18 +157,37 @@ class ResumableUploaderTest extends TestCase {
 
 		$init = $this->server->requests[0];
 		$this->assertSame( 'POST', $init['method'] );
-		$this->assertSame( ResumableUploader::INIT_URL, $init['url'] );
+		$this->assertSame( ResumableUploader::INIT_ENDPOINT . 'snippet,status,recordingDetails', $init['url'] );
 		$this->assertSame( 'Bearer tok', $init['headers']['Authorization'] );
 		$this->assertSame( '25', $init['headers']['X-Upload-Content-Length'] );
 		$this->assertSame( 'video/mp4', $init['headers']['X-Upload-Content-Type'] );
 		$this->assertSame(
 			[
-				'snippet' => [ 'title' => 'Tour du Mont Blanc', 'description' => 'Une belle randonnée.', 'categoryId' => '22' ],
-				'status'  => [ 'privacyStatus' => 'private', 'selfDeclaredMadeForKids' => false ],
+				'snippet'          => [
+					'title'                => 'Tour du Mont Blanc',
+					'description'          => 'Une belle randonnée.',
+					'categoryId'           => '22',
+					'defaultLanguage'      => 'fr',
+					'defaultAudioLanguage' => 'fr',
+				],
+				'status'           => [ 'privacyStatus' => 'private', 'selfDeclaredMadeForKids' => false, 'license' => 'creativeCommon' ],
+				'recordingDetails' => [ 'recordingDate' => '2026-10-05T12:00:00Z' ],
 			],
 			json_decode( $init['body'], true )
 		);
 		$this->assertStringContainsString( 'randonnée', $init['body'] );
+	}
+
+	public function test_language_and_recording_details_are_left_out_when_unknown(): void {
+		$this->uploader()->run( $this->job( [ 'language' => null, 'recording_date' => null ] ), 600 );
+
+		$init = $this->server->requests[0];
+		$this->assertSame( ResumableUploader::INIT_ENDPOINT . 'snippet,status', $init['url'] );
+		$body = json_decode( $init['body'], true );
+		$this->assertArrayNotHasKey( 'recordingDetails', $body );
+		$this->assertArrayNotHasKey( 'defaultLanguage', $body['snippet'] );
+		$this->assertArrayNotHasKey( 'defaultAudioLanguage', $body['snippet'] );
+		$this->assertSame( 'creativeCommon', $body['status']['license'] );
 	}
 
 	public function test_sends_chunks_with_content_range_headers(): void {

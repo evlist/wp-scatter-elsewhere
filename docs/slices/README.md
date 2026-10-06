@@ -14,7 +14,7 @@ when a slice is about to start. Tentative plan for the YouTube destination (see
 5. [Publication state](005-publication-state.md): store the YouTube id on the post, prevent double uploads, expose the YouTube link (template function and shortcode).
 6. Thumbnail from the post featured image.
 7. Term rules table: playlists and keywords from taxonomy terms.
-8. Video language, license and recording date.
+8. [Language, license and recording date](008-language-license-recording-date.md): sent with uploads and applicable to a video already on YouTube.
 9. Subtitles (WebVTT).
 10. Post-publish panel: after publication, choose the video, privacy and license.
 11. Sidebar button and status, to publish later or retry.

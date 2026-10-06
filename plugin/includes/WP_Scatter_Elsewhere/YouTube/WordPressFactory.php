@@ -135,6 +135,10 @@ final class WordPressFactory {
 		);
 	}
 
+	public static function videoUpdater(): VideoUpdater {
+		return new VideoUpdater( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
+	}
+
 	/**
 	 * @return \Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string}
 	 */

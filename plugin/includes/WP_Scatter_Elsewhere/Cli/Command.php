@@ -9,10 +9,14 @@ use WP_Scatter_Elsewhere\Detection\DetectedVideo;
 use WP_Scatter_Elsewhere\Detection\DetectionException;
 use WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use InvalidArgumentException;
+use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
+use WP_Scatter_Elsewhere\YouTube\VideoUpdater;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
+use WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException;
 
 /**
  * Publishes the videos of posts on YouTube.
@@ -72,6 +76,9 @@ final class Command {
 	 * [--privacy=<privacy>]
 	 * : private, unlisted or public. Defaults to the setting, which is private unless changed.
 	 *
+	 * [--license=<license>]
+	 * : youtube or creativeCommon. Defaults to the setting.
+	 *
 	 * [--force]
 	 * : Upload even if the video is already on YouTube (for example after deleting it there).
 	 *
@@ -89,17 +96,19 @@ final class Command {
 		}
 
 		$video    = $this->selectVideo( $this->detect( $postId ), $args[1] ?? null );
-		$metadata = MetadataFactory::composer()->compose( MetadataFactory::postData( $post ) );
+		$metadata = MetadataFactory::videoMetadataBuilder()->build( MetadataFactory::postData( $post ), isset( $assoc['license'] ) ? (string) $assoc['license'] : null );
 		$service  = WordPressFactory::uploadService();
 
 		try {
-			$job = $service->enqueue( $video, $postId, $metadata['title'], $metadata['description'], isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null, ! empty( $assoc['force'] ) );
+			$job = $service->enqueue( $video, $postId, $metadata, isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null, ! empty( $assoc['force'] ) );
 		} catch ( UploadException $e ) {
 			WP_CLI::error( $e->getMessage() );
 		}
 
 		/* translators: 1: job id, 2: video title, 3: privacy (private, unlisted or public). */
 		WP_CLI::log( sprintf( __( 'Upload %1$s created: "%2$s", privacy: %3$s.', 'wp-scatter-elsewhere' ), $job->id(), $job->title(), $job->privacy() ) );
+		/* translators: 1: license, 2: language code (may be empty), 3: recording date (may be empty). */
+		WP_CLI::log( sprintf( __( 'License: %1$s, language: %2$s, recording date: %3$s.', 'wp-scatter-elsewhere' ), $job->license(), (string) $job->language(), (string) $job->recordingDate() ) );
 
 		if ( ! empty( $assoc['now'] ) ) {
 			$this->runNow( $service, $job->id() );
@@ -140,6 +149,78 @@ final class Command {
 		}
 
 		WP_CLI::success( sprintf( /* translators: %s: YouTube address. */ __( 'Linked to %s', 'wp-scatter-elsewhere' ), $publication->url() ) );
+	}
+
+	/**
+	 * Applies properties of a post to the YouTube video recorded for it.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a post.
+	 *
+	 * [<video-id>]
+	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
+	 *
+	 * [--fields=<fields>]
+	 * : Comma-separated list among language, license, recording_date, title and description.
+	 * ---
+	 * default: language,license,recording_date
+	 * ---
+	 *
+	 * @subcommand apply-metadata
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function apply_metadata( array $args, array $assoc ): void {
+		$postId = (int) $args[0];
+		$post   = get_post( $postId );
+		if ( ! $post instanceof \WP_Post ) {
+			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$publication = $this->selectPublication( $postId, $args[1] ?? null );
+		$metadata    = MetadataFactory::videoMetadataBuilder()->build( MetadataFactory::postData( $post ) );
+
+		$available = [
+			'title'          => $metadata->title,
+			'description'    => $metadata->description,
+			'language'       => $metadata->language,
+			'license'        => $metadata->license,
+			'recording_date' => $metadata->recordingDate,
+		];
+
+		$changes = [];
+		foreach ( array_filter( array_map( 'trim', explode( ',', (string) ( $assoc['fields'] ?? 'language,license,recording_date' ) ) ) ) as $field ) {
+			if ( ! in_array( $field, VideoUpdater::FIELDS, true ) ) {
+				WP_CLI::error( sprintf( /* translators: %s: field name. */ __( 'Unknown field: %s', 'wp-scatter-elsewhere' ), $field ) );
+			}
+			if ( null === $available[ $field ] || '' === $available[ $field ] ) {
+				WP_CLI::warning( sprintf( /* translators: %s: field name. */ __( 'No value for %s, it is left unchanged.', 'wp-scatter-elsewhere' ), $field ) );
+				continue;
+			}
+			$changes[ $field ] = $available[ $field ];
+		}
+
+		if ( [] === $changes ) {
+			WP_CLI::error( __( 'Nothing to update.', 'wp-scatter-elsewhere' ) );
+		}
+
+		try {
+			WordPressFactory::videoUpdater()->update( $publication->youtubeId, $changes );
+		} catch ( InvalidArgumentException | YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		WP_CLI::success(
+			sprintf(
+				/* translators: 1: YouTube address, 2: comma-separated field names. */
+				__( 'Updated %1$s (%2$s).', 'wp-scatter-elsewhere' ),
+				$publication->url(),
+				implode( ', ', array_keys( $changes ) )
+			)
+		);
 	}
 
 	/**
@@ -203,6 +284,34 @@ final class Command {
 		} catch ( DetectionException $e ) {
 			WP_CLI::error( $e->getMessage() );
 		}
+	}
+
+	private function selectPublication( int $postId, ?string $videoId ): \WP_Scatter_Elsewhere\Publication\Publication {
+		$publications = PublicationFactory::store()->forPost( $postId );
+
+		if ( null !== $videoId ) {
+			if ( ! isset( $publications[ $videoId ] ) ) {
+				WP_CLI::error( __( 'No YouTube video is recorded for this video of the post. Use "upload" or "link".', 'wp-scatter-elsewhere' ) );
+			}
+
+			return $publications[ $videoId ];
+		}
+
+		if ( 1 === count( $publications ) ) {
+			return reset( $publications );
+		}
+
+		if ( [] === $publications ) {
+			WP_CLI::error( __( 'No YouTube video is recorded for this post. Use "upload" or "link".', 'wp-scatter-elsewhere' ) );
+		}
+
+		WP_CLI::error(
+			sprintf(
+				/* translators: %s: comma-separated video IDs. */
+				__( 'Several YouTube videos are recorded for this post, specify one of: %s', 'wp-scatter-elsewhere' ),
+				implode( ', ', array_keys( $publications ) )
+			)
+		);
 	}
 
 	/**
