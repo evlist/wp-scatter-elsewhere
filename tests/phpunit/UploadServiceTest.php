@@ -647,4 +647,21 @@ class UploadServiceTest extends TestCase {
 
 		$this->assertSame( [], $this->playlistRequests );
 	}
+
+	public function test_jobs_for_a_post_gives_the_latest_job_of_each_video(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video( 'v1' ), 7, $this->metadata() );
+		$this->server->script = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
+		$service->process( 'job1', 600 );
+		$service->retry( 'job1' );
+		$service->enqueue( $this->video( 'v2' ), 7, $this->metadata() );
+		$service->enqueue( $this->video( 'v3' ), 8, $this->metadata() );
+
+		$jobs = $service->jobsForPost( 7 );
+
+		$this->assertSame( [ 'v1', 'v2' ], array_keys( $jobs ) );
+		$this->assertSame( 'job1', $jobs['v1']->id() );
+		$this->assertSame( 'job2', $jobs['v2']->id() );
+		$this->assertSame( [], $service->jobsForPost( 99 ) );
+	}
 }

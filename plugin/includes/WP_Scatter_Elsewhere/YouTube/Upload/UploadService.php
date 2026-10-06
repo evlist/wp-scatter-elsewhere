@@ -360,6 +360,22 @@ final class UploadService {
 		return $this->store->all();
 	}
 
+	/**
+	 * The latest job of each video of a post, by detected video id.
+	 *
+	 * @return array<string, UploadJob>
+	 */
+	public function jobsForPost( int $postId ): array {
+		$latest = [];
+		foreach ( $this->store->all() as $job ) {
+			if ( $job->postId() === $postId ) {
+				$latest[ $job->videoId() ] = $job;
+			}
+		}
+
+		return $latest;
+	}
+
 	public function job( string $jobId ): ?UploadJob {
 		return $this->store->get( $jobId );
 	}
