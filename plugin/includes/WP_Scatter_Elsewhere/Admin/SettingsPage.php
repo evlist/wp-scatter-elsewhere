@@ -309,11 +309,6 @@ class SettingsPage {
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_RULES ); ?>" />
 			<?php wp_nonce_field( self::ACTION_RULES ); ?>
-			<datalist id="wpse-playlists">
-				<?php foreach ( $playlists as $id => $title ) : ?>
-					<option value="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $title ); ?></option>
-				<?php endforeach; ?>
-			</datalist>
 			<table class="widefat striped" style="max-width:60em">
 				<thead>
 					<tr>
@@ -341,7 +336,21 @@ class SettingsPage {
 									<?php endforeach; ?>
 								</select>
 							</td>
-							<td><input type="text" class="regular-text code" list="wpse-playlists" name="rules[<?php echo esc_attr( (string) $index ); ?>][playlist_id]" value="<?php echo esc_attr( $row['playlist_id'] ); ?>" /></td>
+							<td>
+								<?php if ( [] === $playlists ) : ?>
+									<input type="text" class="regular-text code" name="rules[<?php echo esc_attr( (string) $index ); ?>][playlist_id]" value="<?php echo esc_attr( $row['playlist_id'] ); ?>" />
+								<?php else : ?>
+									<select name="rules[<?php echo esc_attr( (string) $index ); ?>][playlist_id]">
+										<option value=""></option>
+										<?php if ( '' !== $row['playlist_id'] && ! isset( $playlists[ $row['playlist_id'] ] ) ) : ?>
+											<option value="<?php echo esc_attr( $row['playlist_id'] ); ?>" selected="selected"><?php echo esc_html( $row['playlist_id'] ); ?></option>
+										<?php endif; ?>
+										<?php foreach ( $playlists as $id => $title ) : ?>
+											<option value="<?php echo esc_attr( $id ); ?>" <?php selected( $row['playlist_id'], $id ); ?>><?php echo esc_html( $title ); ?></option>
+										<?php endforeach; ?>
+									</select>
+								<?php endif; ?>
+							</td>
 							<td><input type="text" class="regular-text" name="rules[<?php echo esc_attr( (string) $index ); ?>][keyword]" value="<?php echo esc_attr( $row['keyword'] ); ?>" /></td>
 							<td><input type="checkbox" name="rules[<?php echo esc_attr( (string) $index ); ?>][include_children]" value="1" <?php checked( $row['include_children'] ); ?> title="<?php echo esc_attr__( 'Also apply to the posts that have a sub-term of this term', 'wp-scatter-elsewhere' ); ?>" /></td>
 							<td><input type="checkbox" name="rules[<?php echo esc_attr( (string) $index ); ?>][remove]" value="1" /></td>
@@ -350,7 +359,7 @@ class SettingsPage {
 				</tbody>
 			</table>
 			<?php if ( [] === $playlists ) : ?>
-				<p class="description"><?php echo esc_html__( 'The playlists of the channel could not be read (not connected, or YouTube refused). A playlist ID can still be typed.', 'wp-scatter-elsewhere' ); ?></p>
+				<p class="description"><?php echo esc_html__( 'The playlists of the channel could not be read (not connected, or YouTube refused): type the ID of a playlist instead.', 'wp-scatter-elsewhere' ); ?></p>
 			<?php endif; ?>
 			<?php submit_button( __( 'Save rules', 'wp-scatter-elsewhere' ) ); ?>
 		</form>

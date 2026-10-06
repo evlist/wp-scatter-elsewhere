@@ -80,9 +80,11 @@ left out and reported; angle brackets are removed.
 
 A table with one row per rule: term (chosen among the terms of the public taxonomies),
 playlist, keyword, include sub-terms, and a "remove" checkbox, plus a few empty rows to
-add rules (empty rows are ignored when saving). The playlist is a text field that
-suggests the playlists of the channel read from YouTube (kept one hour), so an id can
-still be typed when the list cannot be read.
+add rules (empty rows are ignored when saving). The playlist is a list showing the
+titles of the playlists of the channel, read from YouTube (kept one hour, and read again
+each time the rules are saved); a playlist that is not in the list keeps its ID as its
+label. When the list cannot be read, the field becomes a text field where the ID can be
+typed.
 
 The rules are validated when they are saved: unknown taxonomy or term, empty rule,
 term listed twice, malformed playlist id.
