@@ -11,6 +11,7 @@ use WP_Scatter_Elsewhere\Publication\Publication;
 use WP_Scatter_Elsewhere\Publication\PublicationStore;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
+use WP_Scatter_Elsewhere\Thumbnails\ThumbnailService;
 use WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException;
 use WP_Scatter_Elsewhere\YouTube\VideoMetadata;
 
@@ -32,6 +33,8 @@ final class UploadService {
 
 	private SubtitleService $subtitles;
 
+	private ThumbnailService $thumbnails;
+
 	/**
 	 * @var Closure(int, string): void
 	 */
@@ -52,12 +55,13 @@ final class UploadService {
 	 * @param Closure(): int             $clock       Current Unix time.
 	 * @param Closure(): string          $idGenerator Returns a unique job id.
 	 */
-	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, SubtitleService $subtitles, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
+	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, SubtitleService $subtitles, ThumbnailService $thumbnails, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
 		$this->store       = $store;
 		$this->uploader    = $uploader;
 		$this->settings     = $settings;
 		$this->publications = $publications;
 		$this->subtitles    = $subtitles;
+		$this->thumbnails   = $thumbnails;
 		$this->scheduler   = $scheduler;
 		$this->clock       = $clock;
 		$this->idGenerator = $idGenerator;
@@ -127,6 +131,7 @@ final class UploadService {
 				'recording_date' => $metadata->recordingDate,
 				'privacy'     => $privacy,
 				'subtitles'   => $this->subtitleTracks( $video ),
+				'thumbnail'   => $metadata->thumbnailSource,
 				'status'      => UploadJob::STATUS_QUEUED,
 				'created_at'  => $now,
 				'updated_at'  => $now,
@@ -175,7 +180,7 @@ final class UploadService {
 
 		if ( UploadJob::STATUS_DONE === $result->status() && null !== $result->youtubeId() ) {
 			$this->publications->save( $result->postId(), new Publication( $result->videoId(), $result->youtubeId(), $result->privacy(), ( $this->clock )(), $result->id() ) );
-			$result = $this->sendSubtitles( $result );
+			$result = $this->finishUpload( $result );
 		}
 
 		if ( UploadJob::STATUS_UPLOADING === $result->status() ) {
@@ -188,29 +193,52 @@ final class UploadService {
 	}
 
 	/**
-	 * Sends the subtitles of a finished upload. Best effort: a problem is kept as a warning of the job.
+	 * Sends what goes with a finished upload: the subtitles and the thumbnail. Best effort: the upload stays
+	 * done and the problems are kept as the warning of the job.
 	 */
-	private function sendSubtitles( UploadJob $job ): UploadJob {
-		if ( [] === $job->subtitles() || null === $job->youtubeId() ) {
+	private function finishUpload( UploadJob $job ): UploadJob {
+		if ( null === $job->youtubeId() ) {
 			return $job;
 		}
 
-		try {
-			$result  = $this->subtitles->sync( $job->youtubeId(), $job->subtitles() );
-			$warning = $result->hasErrors() ? sprintf(
-				/* translators: %s: errors per language. */
-				__( 'Subtitles: %s', 'wp-scatter-elsewhere' ),
-				$result->errorSummary()
-			) : null;
-		} catch ( YouTubeConnectionException $e ) {
-			$warning = sprintf(
-				/* translators: %s: error message. */
-				__( 'Subtitles: %s', 'wp-scatter-elsewhere' ),
-				$e->getMessage()
-			);
+		$warnings = [];
+
+		if ( [] !== $job->subtitles() ) {
+			try {
+				$result = $this->subtitles->sync( $job->youtubeId(), $job->subtitles() );
+				if ( $result->hasErrors() ) {
+					$warnings[] = sprintf(
+						/* translators: %s: errors per language. */
+						__( 'Subtitles: %s', 'wp-scatter-elsewhere' ),
+						$result->errorSummary()
+					);
+				}
+			} catch ( YouTubeConnectionException $e ) {
+				$warnings[] = sprintf(
+					/* translators: %s: error message. */
+					__( 'Subtitles: %s', 'wp-scatter-elsewhere' ),
+					$e->getMessage()
+				);
+			}
 		}
 
-		$job = $job->with( [ 'warning' => $warning ] );
+		if ( null !== $job->thumbnail() ) {
+			try {
+				$this->thumbnails->send( $job->youtubeId(), $job->thumbnail() );
+			} catch ( YouTubeConnectionException $e ) {
+				$warnings[] = sprintf(
+					/* translators: %s: error message. */
+					__( 'Thumbnail: %s', 'wp-scatter-elsewhere' ),
+					$e->getMessage()
+				);
+			}
+		}
+
+		if ( [] === $warnings ) {
+			return $job;
+		}
+
+		$job = $job->with( [ 'warning' => implode( ' | ', $warnings ) ] );
 		$this->store->save( $job );
 
 		return $job;

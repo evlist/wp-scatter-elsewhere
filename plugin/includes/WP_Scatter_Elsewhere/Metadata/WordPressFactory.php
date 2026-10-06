@@ -41,6 +41,20 @@ final class WordPressFactory {
 		);
 	}
 
+	/**
+	 * Path of the original file of the featured image of a post, or null.
+	 */
+	private static function featuredImagePath( WP_Post $post ): ?string {
+		$id = (int) get_post_thumbnail_id( $post );
+		if ( $id <= 0 ) {
+			return null;
+		}
+
+		$path = get_attached_file( $id );
+
+		return is_string( $path ) && is_readable( $path ) ? $path : null;
+	}
+
 	public static function videoMetadataBuilder(): VideoMetadataBuilder {
 		return new VideoMetadataBuilder(
 			self::composer(),
@@ -70,7 +84,8 @@ final class WordPressFactory {
 			(string) get_permalink( $post ),
 			$date instanceof DateTimeImmutable ? $date : new DateTimeImmutable( '@' . (int) get_post_time( 'U', true, $post ) ),
 			(string) get_the_author_meta( 'display_name', (int) $post->post_author ),
-			$terms
+			$terms,
+			self::featuredImagePath( $post )
 		);
 	}
 }

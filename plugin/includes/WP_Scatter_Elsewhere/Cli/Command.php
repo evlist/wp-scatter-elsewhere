@@ -11,6 +11,7 @@ use WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
 use InvalidArgumentException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
+use WP_Scatter_Elsewhere\Thumbnails\WordPressFactory as ThumbnailFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
@@ -207,6 +208,44 @@ final class Command {
 		}
 
 		WP_CLI::success( __( 'Subtitles sent.', 'wp-scatter-elsewhere' ) );
+	}
+
+	/**
+	 * Sets the featured image of a post as the thumbnail of the YouTube video recorded for it.
+	 *
+	 * The image is cropped to 16:9, scaled down to 1280 x 720 and compressed under 2 MB.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a post.
+	 *
+	 * [<video-id>]
+	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
+	 *
+	 * @param string[] $args
+	 */
+	public function thumbnail( array $args ): void {
+		$postId      = (int) $args[0];
+		$post        = get_post( $postId );
+		if ( ! $post instanceof \WP_Post ) {
+			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$publication = $this->selectPublication( $postId, $args[1] ?? null );
+		$image       = MetadataFactory::postData( $post )->featuredImagePath;
+
+		if ( null === $image ) {
+			WP_CLI::error( __( 'This post has no featured image, or its file cannot be read.', 'wp-scatter-elsewhere' ) );
+		}
+
+		try {
+			ThumbnailFactory::service()->send( $publication->youtubeId, $image );
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		WP_CLI::success( sprintf( /* translators: %s: YouTube address. */ __( 'Thumbnail set for %s', 'wp-scatter-elsewhere' ), $publication->url() ) );
 	}
 
 	/**

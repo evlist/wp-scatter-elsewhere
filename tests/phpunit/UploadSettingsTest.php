@@ -28,6 +28,7 @@ class UploadSettingsTest extends TestCase {
 			$this->assertTrue( $settings->sendsRecordingDate() );
 			$this->assertSame( 'sbv', $settings->subtitleFormat() );
 			$this->assertFalse( $settings->removesAutomaticCaptions() );
+			$this->assertTrue( $settings->sendsThumbnail() );
 		}
 	}
 
@@ -53,7 +54,7 @@ class UploadSettingsTest extends TestCase {
 		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false, 'vtt', true );
 
 		$this->assertSame(
-			[ 'subtitle_format' => 'vtt', 'remove_auto_captions' => true, 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
+			[ 'send_thumbnail' => true, 'subtitle_format' => 'vtt', 'remove_auto_captions' => true, 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
 			$this->saved
 		);
 	}
@@ -65,6 +66,14 @@ class UploadSettingsTest extends TestCase {
 
 		$this->expectException( InvalidArgumentException::class );
 		$this->settings( [] )->save( 'private', 'youtube', '', true, 'doc' );
+	}
+
+	public function test_the_thumbnail_switch_is_saved(): void {
+		$this->settings( [] )->save( 'private', 'youtube', '', true, 'sbv', false, false );
+
+		$this->assertFalse( $this->saved['send_thumbnail'] );
+		$this->assertFalse( $this->settings( [ 'send_thumbnail' => false ] )->sendsThumbnail() );
+		$this->assertTrue( $this->settings( [ 'send_thumbnail' => 'no' ] )->sendsThumbnail() );
 	}
 
 	public function test_an_empty_language_is_valid_and_means_the_site_language(): void {

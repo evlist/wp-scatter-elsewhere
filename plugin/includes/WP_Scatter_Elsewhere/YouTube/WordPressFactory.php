@@ -10,6 +10,7 @@ use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
+use WP_Scatter_Elsewhere\Thumbnails\WordPressFactory as ThumbnailFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\ResumableUploader;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJobStore;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
@@ -129,6 +130,7 @@ final class WordPressFactory {
 			self::uploadSettings(),
 			PublicationFactory::store(),
 			self::subtitleService(),
+			ThumbnailFactory::service(),
 			static function ( int $when, string $jobId ): void {
 				// Refused without effect when the same run is already scheduled.
 				wp_schedule_single_event( $when, self::UPLOAD_HOOK, [ $jobId ] );
@@ -160,7 +162,7 @@ final class WordPressFactory {
 	/**
 	 * @return \Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string}
 	 */
-	private static function uploadHttp(): \Closure {
+	public static function uploadHttp(): \Closure {
 		return static function ( string $method, string $url, array $headers, string $body ): array {
 			$response = wp_remote_request(
 				$url,

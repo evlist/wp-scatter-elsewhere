@@ -44,7 +44,9 @@ final class VideoMetadataBuilder {
 			$text['description'],
 			$language,
 			$license ?? $this->settings->defaultLicense(),
-			$this->settings->sendsRecordingDate() ? $this->recordingDate( $post ) : null
+			$this->settings->sendsRecordingDate() ? $this->recordingDate( $post ) : null,
+			VideoMetadata::DEFAULT_CATEGORY_ID,
+			$this->settings->sendsThumbnail() ? $post->featuredImagePath : null
 		);
 	}
 

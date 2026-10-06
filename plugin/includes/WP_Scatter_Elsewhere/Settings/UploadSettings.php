@@ -99,6 +99,12 @@ class UploadSettings {
 		return is_bool( $value ) ? $value : false;
 	}
 
+	public function sendsThumbnail(): bool {
+		$value = $this->stored( 'send_thumbnail' );
+
+		return is_bool( $value ) ? $value : true;
+	}
+
 	public function sendsRecordingDate(): bool {
 		$value = $this->stored( 'send_recording_date' );
 
@@ -111,7 +117,7 @@ class UploadSettings {
 	 * @param string $language Empty to derive the language from the site language.
 	 * @throws InvalidArgumentException When a value is invalid; nothing is saved.
 	 */
-	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV, bool $removeAutoCaptions = false ): void {
+	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV, bool $removeAutoCaptions = false, bool $sendThumbnail = true ): void {
 		$language = trim( $language );
 
 		if ( ! self::isValidPrivacy( $privacy ) ) {
@@ -132,6 +138,7 @@ class UploadSettings {
 
 		( $this->saver )(
 			[
+				'send_thumbnail'      => $sendThumbnail,
 				'subtitle_format'     => $subtitleFormat,
 				'remove_auto_captions' => $removeAutoCaptions,
 				'default_privacy'     => $privacy,

@@ -11,6 +11,9 @@ use WP_Scatter_Elsewhere\Detection\SubtitleTrack;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
 use WP_Scatter_Elsewhere\YouTube\CaptionClient;
+use WP_Scatter_Elsewhere\Thumbnails\ThumbnailPreparer;
+use WP_Scatter_Elsewhere\Thumbnails\ThumbnailService;
+use WP_Scatter_Elsewhere\YouTube\ThumbnailClient;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\YouTube\AccessTokenProvider;
 use WP_Scatter_Elsewhere\YouTube\OAuthClient;
@@ -36,6 +39,12 @@ class UploadServiceTest extends TestCase {
 
 	/** @var array<int, array{status: int, headers: array<string, string>, body: string}> */
 	private array $captionResponses = [];
+
+	/** @var array<int, array{url: string, body: string, type: string}> Requests made to set a thumbnail. */
+	private array $thumbnailRequests = [];
+
+	/** @var array<int, array{status: int, headers: array<string, string>, body: string}> */
+	private array $thumbnailResponses = [];
 
 	/** @var array<int, array{int, string}> */
 	private array $scheduled = [];
@@ -102,6 +111,17 @@ class UploadServiceTest extends TestCase {
 				new UploadSettings( static fn(): array => [], static function ( array $v ): void {} ),
 				static fn( string $path ): string|false => "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nTexte\n"
 			),
+			new ThumbnailService(
+				new ThumbnailClient(
+					function ( string $method, string $url, array $headers, string $body ): array {
+						$this->thumbnailRequests[] = [ 'url' => $url, 'body' => $body, 'type' => $headers['Content-Type'] ];
+
+						return array_shift( $this->thumbnailResponses ) ?? [ 'status' => 200, 'headers' => [], 'body' => '{}' ];
+					},
+					$tokens
+				),
+				new ThumbnailPreparer( static fn( string $path, int $quality ): string|false => 'jpeg:' . $path . ':' . $quality )
+			),
 			function ( int $when, string $id ): void {
 				$this->scheduled[] = [ $when, $id ];
 			},
@@ -110,8 +130,8 @@ class UploadServiceTest extends TestCase {
 		);
 	}
 
-	private function metadata( string $license = 'youtube' ): VideoMetadata {
-		return new VideoMetadata( 'Title', 'Description', 'fr', $license, '2026-10-05T12:00:00Z' );
+	private function metadata( string $license = 'youtube', ?string $thumbnail = null ): VideoMetadata {
+		return new VideoMetadata( 'Title', 'Description', 'fr', $license, '2026-10-05T12:00:00Z', '22', $thumbnail );
 	}
 
 	/**
@@ -514,5 +534,59 @@ class UploadServiceTest extends TestCase {
 
 		$this->assertSame( UploadJob::STATUS_UPLOADING, $job->status() );
 		$this->assertSame( [], $this->captionRequests );
+	}
+
+	public function test_the_thumbnail_source_is_stored_in_the_job(): void {
+		$job = $this->service()->enqueue( $this->video(), 7, $this->metadata( 'youtube', '/uploads/featured.jpg' ) );
+
+		$this->assertSame( '/uploads/featured.jpg', $job->thumbnail() );
+		$this->assertNull( $this->service()->enqueue( $this->video( 'v2' ), 7, $this->metadata() )->thumbnail() );
+	}
+
+	public function test_a_completed_upload_sets_the_thumbnail(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata( 'youtube', '/uploads/featured.jpg' ) );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertNull( $job->warning() );
+		$this->assertCount( 1, $this->thumbnailRequests );
+		$this->assertSame( 'https://www.googleapis.com/upload/youtube/v3/thumbnails/set?uploadType=media&videoId=vid123', $this->thumbnailRequests[0]['url'] );
+		$this->assertSame( 'image/jpeg', $this->thumbnailRequests[0]['type'] );
+		$this->assertSame( 'jpeg:/uploads/featured.jpg:90', $this->thumbnailRequests[0]['body'] );
+	}
+
+	public function test_no_thumbnail_request_is_made_without_a_source(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata() );
+		$service->process( 'job1', 600 );
+
+		$this->assertSame( [], $this->thumbnailRequests );
+	}
+
+	public function test_a_thumbnail_problem_leaves_the_upload_done_with_a_warning(): void {
+		$this->thumbnailResponses = [ [ 'status' => 403, 'headers' => [], 'body' => '{"error":{"errors":[{"reason":"forbidden"}]}}' ] ];
+		$service                  = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata( 'youtube', '/uploads/featured.jpg' ) );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertStringStartsWith( 'Thumbnail:', (string) $job->warning() );
+		$this->assertStringContainsString( 'verified', (string) $service->job( 'job1' )->warning() );
+		$this->assertSame( 'vid123', $this->meta[7]['v1']['youtube_id'] );
+	}
+
+	public function test_warnings_of_subtitles_and_thumbnail_are_joined(): void {
+		$this->captionResponses   = [ [ 'status' => 500, 'headers' => [], 'body' => '' ] ];
+		$this->thumbnailResponses = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
+		$service                  = $this->service();
+		$service->enqueue( $this->video( 'v1', null, null, [ $this->track( 'u1', 'fr' ) ] ), 7, $this->metadata( 'youtube', '/uploads/featured.jpg' ) );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertStringContainsString( 'Subtitles:', (string) $job->warning() );
+		$this->assertStringContainsString( ' | Thumbnail:', (string) $job->warning() );
 	}
 }

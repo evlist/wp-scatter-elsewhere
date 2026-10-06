@@ -52,6 +52,11 @@ wp scatter-elsewhere retry <job-id> [--now]
   subtitles never fails the upload, it shows as a warning in `jobs`. To delete the automatic captions of the
   languages sent, enable the setting or use `--remove-auto`. To send or
   replace them later: `wp scatter-elsewhere subtitles <post-id> [<video-id>]`.
+- Thumbnail: the featured image of the post is cropped to 16:9, scaled to 1280 x 720
+  and compressed under 2 MB, then sent after an upload (setting *Thumbnail*). A
+  problem never fails the upload, it shows as a warning in `jobs`. To send it later:
+  `wp scatter-elsewhere thumbnail <post-id> [<video-id>]`. YouTube only allows custom
+  thumbnails on verified channels.
 - To see what YouTube holds for the subtitles of a video (state, failure reason,
   automatic or creator track): `wp scatter-elsewhere captions <post-id> [<video-id>]`.
 - **Videos are private by default** (setting *Default privacy*), so tests do not

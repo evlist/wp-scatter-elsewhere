@@ -84,7 +84,7 @@ class SettingsPage {
 		$subtitleFormat = isset( $_POST['subtitle_format'] ) ? sanitize_key( wp_unslash( $_POST['subtitle_format'] ) ) : '';
 
 		try {
-			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat, isset( $_POST['remove_auto_captions'] ) );
+			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat, isset( $_POST['remove_auto_captions'] ), isset( $_POST['send_thumbnail'] ) );
 		} catch ( InvalidArgumentException $e ) {
 			$this->redirectWithError( $e->getMessage() );
 		}
@@ -293,6 +293,15 @@ class SettingsPage {
 					<td>
 						<input type="text" id="wpse-language" name="language" class="small-text code" value="<?php echo esc_attr( $settings->language() ); ?>" />
 						<p class="description"><?php echo esc_html__( 'A language code such as fr, en or pt-BR. Leave empty to use the language of the site.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php echo esc_html__( 'Thumbnail', 'wp-scatter-elsewhere' ); ?></th>
+					<td>
+						<label for="wpse-send-thumbnail">
+							<input type="checkbox" id="wpse-send-thumbnail" name="send_thumbnail" value="1" <?php checked( $settings->sendsThumbnail() ); ?> />
+							<?php echo esc_html__( 'Send the featured image of the post as the thumbnail of the video', 'wp-scatter-elsewhere' ); ?>
+						</label>
 					</td>
 				</tr>
 				<tr>

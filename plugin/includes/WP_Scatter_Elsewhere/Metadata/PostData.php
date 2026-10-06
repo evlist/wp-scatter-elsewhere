@@ -15,7 +15,8 @@ use DateTimeImmutable;
 final class PostData {
 
 	/**
-	 * @param array<string, string[]> $terms Term names keyed by taxonomy.
+	 * @param array<string, string[]> $terms             Term names keyed by taxonomy.
+	 * @param ?string                 $featuredImagePath Path of the original file of the featured image, if any.
 	 */
 	public function __construct(
 		public readonly string $title,
@@ -23,7 +24,8 @@ final class PostData {
 		public readonly string $permalink,
 		public readonly DateTimeImmutable $date,
 		public readonly string $author,
-		public readonly array $terms = []
+		public readonly array $terms = [],
+		public readonly ?string $featuredImagePath = null
 	) {
 	}
 }

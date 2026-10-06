@@ -39,6 +39,7 @@ final class UploadJob {
 		'error'        => null,
 		'warning'      => null,
 		'subtitles'    => [],
+		'thumbnail'    => null,
 		'created_at'   => 0,
 		'updated_at'   => 0,
 	];
@@ -181,6 +182,13 @@ final class UploadJob {
 	 */
 	public function subtitles(): array {
 		return $this->data['subtitles'];
+	}
+
+	/**
+	 * Path of the image to send as thumbnail once the video is uploaded.
+	 */
+	public function thumbnail(): ?string {
+		return $this->data['thumbnail'];
 	}
 
 	public function createdAt(): int {

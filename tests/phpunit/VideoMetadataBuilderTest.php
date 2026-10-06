@@ -28,8 +28,8 @@ class VideoMetadataBuilderTest extends TestCase {
 		);
 	}
 
-	private function post( string $date = '2026-10-05 23:07:21', string $timezone = 'Europe/Paris' ): PostData {
-		return new PostData( 'Grenoble ⇾ Salers', 'Une étape.', 'https://example.org/p/', new DateTimeImmutable( $date, new DateTimeZone( $timezone ) ), 'Eric' );
+	private function post( string $date = '2026-10-05 23:07:21', string $timezone = 'Europe/Paris', ?string $image = '/uploads/featured.jpg' ): PostData {
+		return new PostData( 'Grenoble ⇾ Salers', 'Une étape.', 'https://example.org/p/', new DateTimeImmutable( $date, new DateTimeZone( $timezone ) ), 'Eric', [], $image );
 	}
 
 	public function test_builds_the_metadata_with_the_defaults(): void {
@@ -63,5 +63,11 @@ class VideoMetadataBuilderTest extends TestCase {
 
 		$this->assertSame( 'creativeCommon', $builder->build( $this->post() )->license );
 		$this->assertSame( 'youtube', $builder->build( $this->post(), 'youtube' )->license );
+	}
+
+	public function test_the_featured_image_is_the_thumbnail_source_unless_switched_off_or_missing(): void {
+		$this->assertSame( '/uploads/featured.jpg', $this->builder()->build( $this->post() )->thumbnailSource );
+		$this->assertNull( $this->builder( [ 'send_thumbnail' => false ] )->build( $this->post() )->thumbnailSource );
+		$this->assertNull( $this->builder()->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null ) )->thumbnailSource );
 	}
 }
