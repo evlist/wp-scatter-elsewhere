@@ -15,7 +15,7 @@ when a slice is about to start. Tentative plan for the YouTube destination (see
 6. Thumbnail from the post featured image.
 7. Term rules table: playlists and keywords from taxonomy terms.
 8. [Language, license and recording date](008-language-license-recording-date.md): sent with uploads and applicable to a video already on YouTube.
-9. Subtitles (WebVTT).
+9. [Subtitles](009-subtitles.md): WebVTT tracks of the page, converted to SubRip, sent after an upload or on demand.
 10. Post-publish panel: after publication, choose the video, privacy and license.
 11. Sidebar button and status, to publish later or retry.
 12. Locale-aware ordinal date placeholder.

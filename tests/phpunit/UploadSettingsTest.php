@@ -26,6 +26,7 @@ class UploadSettingsTest extends TestCase {
 			$this->assertSame( 'youtube', $settings->defaultLicense() );
 			$this->assertSame( '', $settings->language() );
 			$this->assertTrue( $settings->sendsRecordingDate() );
+			$this->assertSame( 'srt', $settings->subtitleFormat() );
 		}
 	}
 
@@ -48,12 +49,20 @@ class UploadSettingsTest extends TestCase {
 	}
 
 	public function test_saves_valid_values(): void {
-		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false );
+		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false, 'vtt' );
 
 		$this->assertSame(
-			[ 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
+			[ 'subtitle_format' => 'vtt', 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
 			$this->saved
 		);
+	}
+
+	public function test_the_subtitle_format_is_validated_and_defaults_to_srt(): void {
+		$this->assertSame( 'vtt', $this->settings( [ 'subtitle_format' => 'vtt' ] )->subtitleFormat() );
+		$this->assertSame( 'srt', $this->settings( [ 'subtitle_format' => 'doc' ] )->subtitleFormat() );
+
+		$this->expectException( InvalidArgumentException::class );
+		$this->settings( [] )->save( 'private', 'youtube', '', true, 'doc' );
 	}
 
 	public function test_an_empty_language_is_valid_and_means_the_site_language(): void {

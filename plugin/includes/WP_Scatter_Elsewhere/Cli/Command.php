@@ -152,6 +152,56 @@ final class Command {
 	}
 
 	/**
+	 * Sends the subtitle tracks of a video of a post to the YouTube video recorded for it.
+	 *
+	 * Tracks are added, or replaced when YouTube already has a standard track for the language.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a published post.
+	 *
+	 * [<video-id>]
+	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
+	 *
+	 * @param string[] $args
+	 */
+	public function subtitles( array $args ): void {
+		$postId      = (int) $args[0];
+		$publication = $this->selectPublication( $postId, $args[1] ?? null );
+		$video       = $this->selectVideo( $this->detect( $postId ), $publication->videoId );
+
+		$tracks = [];
+		foreach ( $video->subtitles as $track ) {
+			if ( $track->isUsable() ) {
+				$tracks[] = [ 'language' => (string) $track->language, 'path' => $track->file->path ];
+			} else {
+				WP_CLI::warning( sprintf( /* translators: 1: subtitle address, 2: reason. */ __( 'Skipped %1$s: %2$s', 'wp-scatter-elsewhere' ), $track->url, (string) $track->reason ) );
+			}
+		}
+
+		if ( [] === $tracks ) {
+			WP_CLI::error( __( 'No usable subtitle track in the page of this post.', 'wp-scatter-elsewhere' ) );
+		}
+
+		try {
+			$result = WordPressFactory::subtitleService()->sync( $publication->youtubeId, $tracks );
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		foreach ( $result->actions as $language => $action ) {
+			WP_CLI::log( sprintf( /* translators: 1: language code, 2: "inserted" or "replaced". */ __( '%1$s: %2$s', 'wp-scatter-elsewhere' ), $language, $action ) );
+		}
+
+		if ( $result->hasErrors() ) {
+			WP_CLI::error( $result->errorSummary() );
+		}
+
+		WP_CLI::success( __( 'Subtitles sent.', 'wp-scatter-elsewhere' ) );
+	}
+
+	/**
 	 * Applies properties of a post to the YouTube video recorded for it.
 	 *
 	 * ## OPTIONS
@@ -237,7 +287,7 @@ final class Command {
 				'status'   => $job->status(),
 				'progress' => $this->progress( $job ),
 				'youtube'  => (string) $job->youtubeId(),
-				'error'    => (string) $job->error(),
+				'error'    => trim( (string) $job->error() . ' ' . (string) $job->warning() ),
 			];
 		}
 

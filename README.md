@@ -47,6 +47,10 @@ wp scatter-elsewhere retry <job-id> [--now]
   upload. Set them on the settings page. To apply them to a video that is already
   on YouTube:
   `wp scatter-elsewhere apply-metadata <post-id> [<video-id>] [--fields=language,license,recording_date]`.
+- Subtitles: the `<track>` files of the page (WebVTT) are sent after an upload,
+  converted to SubRip by default (setting *Subtitle format*). A problem with the
+  subtitles never fails the upload, it shows as a warning in `jobs`. To send or
+  replace them later: `wp scatter-elsewhere subtitles <post-id> [<video-id>]`.
 - **Videos are private by default** (setting *Default privacy*), so tests do not
   show on your channel. Delete test videos in YouTube Studio.
 - To the best of our knowledge, Google keeps the videos uploaded by a project

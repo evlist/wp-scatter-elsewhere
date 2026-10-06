@@ -8,6 +8,8 @@ use RuntimeException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
+use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
+use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
 use WP_Scatter_Elsewhere\YouTube\Upload\ResumableUploader;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJobStore;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
@@ -126,12 +128,24 @@ final class WordPressFactory {
 			),
 			self::uploadSettings(),
 			PublicationFactory::store(),
+			self::subtitleService(),
 			static function ( int $when, string $jobId ): void {
 				// Refused without effect when the same run is already scheduled.
 				wp_schedule_single_event( $when, self::UPLOAD_HOOK, [ $jobId ] );
 			},
 			static fn(): int => time(),
 			static fn(): string => 'j' . bin2hex( random_bytes( 6 ) )
+		);
+	}
+
+	public static function subtitleService(): SubtitleService {
+		return new SubtitleService(
+			new CaptionClient( self::uploadHttp(), self::accessTokenProvider( self::settings() ), static fn(): string => 'wpse' . bin2hex( random_bytes( 12 ) ) ),
+			new SubtitleConverter(),
+			self::uploadSettings(),
+			static function ( string $path ): string|false {
+				return is_readable( $path ) ? file_get_contents( $path ) : false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			}
 		);
 	}
 

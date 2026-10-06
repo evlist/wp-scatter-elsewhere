@@ -81,9 +81,10 @@ class SettingsPage {
 		$privacy  = isset( $_POST['default_privacy'] ) ? sanitize_key( wp_unslash( $_POST['default_privacy'] ) ) : '';
 		$license  = isset( $_POST['default_license'] ) ? sanitize_text_field( wp_unslash( $_POST['default_license'] ) ) : '';
 		$language = isset( $_POST['language'] ) ? sanitize_text_field( wp_unslash( $_POST['language'] ) ) : '';
+		$subtitleFormat = isset( $_POST['subtitle_format'] ) ? sanitize_key( wp_unslash( $_POST['subtitle_format'] ) ) : '';
 
 		try {
-			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ) );
+			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat );
 		} catch ( InvalidArgumentException $e ) {
 			$this->redirectWithError( $e->getMessage() );
 		}
@@ -301,6 +302,15 @@ class SettingsPage {
 							<input type="checkbox" id="wpse-recording-date" name="send_recording_date" value="1" <?php checked( $settings->sendsRecordingDate() ); ?> />
 							<?php echo esc_html__( 'Send the date of the post as the recording date of the video', 'wp-scatter-elsewhere' ); ?>
 						</label>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-subtitle-format"><?php echo esc_html__( 'Subtitle format', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<select id="wpse-subtitle-format" name="subtitle_format">
+							<option value="srt" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_SRT ); ?>><?php echo esc_html__( 'SubRip (SRT), converted from WebVTT', 'wp-scatter-elsewhere' ); ?></option>
+							<option value="vtt" <?php selected( $settings->subtitleFormat(), UploadSettings::SUBTITLE_FORMAT_VTT ); ?>><?php echo esc_html__( 'WebVTT, sent as it is', 'wp-scatter-elsewhere' ); ?></option>
+						</select>
 					</td>
 				</tr>
 			</table>

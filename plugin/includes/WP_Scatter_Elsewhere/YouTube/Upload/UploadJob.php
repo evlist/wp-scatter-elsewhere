@@ -37,6 +37,8 @@ final class UploadJob {
 		'locked_until' => 0,
 		'youtube_id'   => null,
 		'error'        => null,
+		'warning'      => null,
+		'subtitles'    => [],
 		'created_at'   => 0,
 		'updated_at'   => 0,
 	];
@@ -55,7 +57,9 @@ final class UploadJob {
 		foreach ( self::DEFAULTS as $key => $default ) {
 			$value = $data[ $key ] ?? $default;
 
-			if ( is_int( $default ) ) {
+			if ( is_array( $default ) ) {
+				$clean[ $key ] = is_array( $value ) ? $value : [];
+			} elseif ( is_int( $default ) ) {
 				$clean[ $key ] = (int) $value;
 			} elseif ( null === $default ) {
 				$clean[ $key ] = null === $value ? null : (string) $value;
@@ -163,6 +167,20 @@ final class UploadJob {
 
 	public function error(): ?string {
 		return $this->data['error'];
+	}
+
+	/**
+	 * A problem that does not make the job fail, such as subtitles that could not be sent.
+	 */
+	public function warning(): ?string {
+		return $this->data['warning'];
+	}
+
+	/**
+	 * @return array<int, array{language: string, path: string}>
+	 */
+	public function subtitles(): array {
+		return $this->data['subtitles'];
 	}
 
 	public function createdAt(): int {

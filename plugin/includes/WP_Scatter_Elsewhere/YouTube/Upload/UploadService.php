@@ -10,6 +10,8 @@ use WP_Scatter_Elsewhere\Detection\DetectedVideo;
 use WP_Scatter_Elsewhere\Publication\Publication;
 use WP_Scatter_Elsewhere\Publication\PublicationStore;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
+use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
+use WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException;
 use WP_Scatter_Elsewhere\YouTube\VideoMetadata;
 
 /**
@@ -27,6 +29,8 @@ final class UploadService {
 	private UploadSettings $settings;
 
 	private PublicationStore $publications;
+
+	private SubtitleService $subtitles;
 
 	/**
 	 * @var Closure(int, string): void
@@ -48,11 +52,12 @@ final class UploadService {
 	 * @param Closure(): int             $clock       Current Unix time.
 	 * @param Closure(): string          $idGenerator Returns a unique job id.
 	 */
-	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
+	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, SubtitleService $subtitles, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
 		$this->store       = $store;
 		$this->uploader    = $uploader;
 		$this->settings     = $settings;
 		$this->publications = $publications;
+		$this->subtitles    = $subtitles;
 		$this->scheduler   = $scheduler;
 		$this->clock       = $clock;
 		$this->idGenerator = $idGenerator;
@@ -121,6 +126,7 @@ final class UploadService {
 				'license'     => $metadata->license,
 				'recording_date' => $metadata->recordingDate,
 				'privacy'     => $privacy,
+				'subtitles'   => $this->subtitleTracks( $video ),
 				'status'      => UploadJob::STATUS_QUEUED,
 				'created_at'  => $now,
 				'updated_at'  => $now,
@@ -169,6 +175,7 @@ final class UploadService {
 
 		if ( UploadJob::STATUS_DONE === $result->status() && null !== $result->youtubeId() ) {
 			$this->publications->save( $result->postId(), new Publication( $result->videoId(), $result->youtubeId(), $result->privacy(), ( $this->clock )(), $result->id() ) );
+			$result = $this->sendSubtitles( $result );
 		}
 
 		if ( UploadJob::STATUS_UPLOADING === $result->status() ) {
@@ -178,6 +185,51 @@ final class UploadService {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Sends the subtitles of a finished upload. Best effort: a problem is kept as a warning of the job.
+	 */
+	private function sendSubtitles( UploadJob $job ): UploadJob {
+		if ( [] === $job->subtitles() || null === $job->youtubeId() ) {
+			return $job;
+		}
+
+		try {
+			$result  = $this->subtitles->sync( $job->youtubeId(), $job->subtitles() );
+			$warning = $result->hasErrors() ? sprintf(
+				/* translators: %s: errors per language. */
+				__( 'Subtitles: %s', 'wp-scatter-elsewhere' ),
+				$result->errorSummary()
+			) : null;
+		} catch ( YouTubeConnectionException $e ) {
+			$warning = sprintf(
+				/* translators: %s: error message. */
+				__( 'Subtitles: %s', 'wp-scatter-elsewhere' ),
+				$e->getMessage()
+			);
+		}
+
+		$job = $job->with( [ 'warning' => $warning ] );
+		$this->store->save( $job );
+
+		return $job;
+	}
+
+	/**
+	 * The usable subtitle tracks of a video, one per language.
+	 *
+	 * @return array<int, array{language: string, path: string}>
+	 */
+	private function subtitleTracks( DetectedVideo $video ): array {
+		$tracks = [];
+		foreach ( $video->subtitles as $track ) {
+			if ( $track->isUsable() ) {
+				$tracks[ (string) $track->language ] ??= [ 'language' => (string) $track->language, 'path' => $track->file->path ];
+			}
+		}
+
+		return array_values( $tracks );
 	}
 
 	/**

@@ -84,7 +84,7 @@ final class VideoUpdater {
 		);
 
 		if ( 200 !== $response['status'] ) {
-			throw new VideoUpdateException( $this->describeError( $response ) );
+			throw new VideoUpdateException( ApiErrors::describe( $response['status'], $response['body'] ) );
 		}
 	}
 
@@ -100,7 +100,7 @@ final class VideoUpdater {
 		);
 
 		if ( 200 !== $response['status'] ) {
-			throw new VideoUpdateException( $this->describeError( $response ) );
+			throw new VideoUpdateException( ApiErrors::describe( $response['status'], $response['body'] ) );
 		}
 
 		$data = json_decode( $response['body'], true );
@@ -172,22 +172,5 @@ final class VideoUpdater {
 				)
 			);
 		}
-	}
-
-	/**
-	 * @param array{status: int, headers: array<string, string>, body: string} $response
-	 */
-	private function describeError( array $response ): string {
-		$data    = json_decode( $response['body'], true );
-		$message = is_array( $data ) ? (string) ( $data['error']['message'] ?? '' ) : '';
-		$reason  = is_array( $data ) ? (string) ( $data['error']['errors'][0]['reason'] ?? '' ) : '';
-
-		return sprintf(
-			/* translators: 1: HTTP status code, 2: error reason code (may be empty), 3: error message (may be empty). */
-			__( 'YouTube answered with HTTP status %1$d (%2$s). %3$s', 'wp-scatter-elsewhere' ),
-			$response['status'],
-			$reason,
-			$message
-		);
 	}
 }

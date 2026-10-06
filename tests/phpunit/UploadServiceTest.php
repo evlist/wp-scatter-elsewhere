@@ -7,6 +7,10 @@ use WP_Scatter_Elsewhere\Detection\DetectedVideo;
 use WP_Scatter_Elsewhere\Detection\LocalFile;
 use WP_Scatter_Elsewhere\Publication\PublicationStore;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
+use WP_Scatter_Elsewhere\Detection\SubtitleTrack;
+use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
+use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
+use WP_Scatter_Elsewhere\YouTube\CaptionClient;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\YouTube\AccessTokenProvider;
 use WP_Scatter_Elsewhere\YouTube\OAuthClient;
@@ -26,6 +30,12 @@ class UploadServiceTest extends TestCase {
 
 	/** @var array<int, array<string, array<string, mixed>>> Post meta by post id. */
 	private array $meta = [];
+
+	/** @var array<int, array{method: string, url: string}> Requests made to the captions API. */
+	private array $captionRequests = [];
+
+	/** @var array<int, array{status: int, headers: array<string, string>, body: string}> */
+	private array $captionResponses = [];
 
 	/** @var array<int, array{int, string}> */
 	private array $scheduled = [];
@@ -78,6 +88,20 @@ class UploadServiceTest extends TestCase {
 					$this->meta[ $postId ] = $value;
 				}
 			),
+			new SubtitleService(
+				new CaptionClient(
+					function ( string $method, string $url, array $headers, string $body ): array {
+						$this->captionRequests[] = [ 'method' => $method, 'url' => $url ];
+
+						return array_shift( $this->captionResponses ) ?? [ 'status' => 200, 'headers' => [], 'body' => '{"items":[]}' ];
+					},
+					$tokens,
+					static fn(): string => 'B'
+				),
+				new SubtitleConverter(),
+				new UploadSettings( static fn(): array => [], static function ( array $v ): void {} ),
+				static fn( string $path ): string|false => "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nTexte\n"
+			),
 			function ( int $when, string $id ): void {
 				$this->scheduled[] = [ $when, $id ];
 			},
@@ -90,10 +114,19 @@ class UploadServiceTest extends TestCase {
 		return new VideoMetadata( 'Title', 'Description', 'fr', $license, '2026-10-05T12:00:00Z' );
 	}
 
-	private function video( string $id = 'v1', ?LocalFile $file = null, ?string $reason = null ): DetectedVideo {
+	/**
+	 * @param SubtitleTrack[] $subtitles
+	 */
+	private function video( string $id = 'v1', ?LocalFile $file = null, ?string $reason = null, array $subtitles = [] ): DetectedVideo {
 		$file ??= new LocalFile( '/uploads/a.mp4', 'https://example.org/uploads/a.mp4', 'video/mp4', strlen( self::CONTENT ), 12 );
 
-		return new DetectedVideo( $id, $file, $reason, [ 'https://example.org/uploads/a.mp4' ], [], null );
+		return new DetectedVideo( $id, $file, $reason, [ 'https://example.org/uploads/a.mp4' ], $subtitles, null );
+	}
+
+	private function track( string $url, ?string $language, ?string $path = '/uploads/a-fr.vtt' ): SubtitleTrack {
+		$file = null === $path ? null : new LocalFile( $path, $url, 'text/vtt', 10, null );
+
+		return new SubtitleTrack( $url, $language, null, $file, null === $file ? 'not local' : null );
 	}
 
 	public function test_enqueue_creates_a_private_job_and_schedules_it(): void {
@@ -406,5 +439,80 @@ class UploadServiceTest extends TestCase {
 
 		$this->expectException( UploadException::class );
 		$service->retry( 'job1' );
+	}
+
+	public function test_only_usable_tracks_are_stored_in_the_job_one_per_language(): void {
+		$video = $this->video(
+			'v1',
+			null,
+			null,
+			[
+				$this->track( 'u1', 'fr', '/uploads/a-fr.vtt' ),
+				$this->track( 'u2', 'fr', '/uploads/other-fr.vtt' ),
+				$this->track( 'u3', 'en', '/uploads/a-en.vtt' ),
+				$this->track( 'u4', null, '/uploads/a-xx.vtt' ),
+				$this->track( 'u5', 'de', null ),
+			]
+		);
+
+		$job = $this->service()->enqueue( $video, 7, $this->metadata() );
+
+		$this->assertSame(
+			[ [ 'language' => 'fr', 'path' => '/uploads/a-fr.vtt' ], [ 'language' => 'en', 'path' => '/uploads/a-en.vtt' ] ],
+			$job->subtitles()
+		);
+	}
+
+	public function test_a_completed_upload_sends_the_subtitles(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video( 'v1', null, null, [ $this->track( 'u1', 'fr' ) ] ), 7, $this->metadata() );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertNull( $job->warning() );
+		$this->assertSame( [ 'GET', 'POST' ], array_column( $this->captionRequests, 'method' ) );
+		$this->assertNull( $service->job( 'job1' )->warning() );
+	}
+
+	public function test_subtitles_that_cannot_be_sent_leave_the_upload_done_with_a_warning(): void {
+		$this->captionResponses = [ [ 'status' => 200, 'headers' => [], 'body' => '{"items":[]}' ], [ 'status' => 400, 'headers' => [], 'body' => '{"error":{"message":"Bad file."}}' ] ];
+		$service                = $this->service();
+		$service->enqueue( $this->video( 'v1', null, null, [ $this->track( 'u1', 'fr' ) ] ), 7, $this->metadata() );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertStringContainsString( 'fr', (string) $job->warning() );
+		$this->assertStringContainsString( 'Bad file.', (string) $service->job( 'job1' )->warning() );
+		$this->assertSame( 'vid123', $this->meta[7]['v1']['youtube_id'] );
+	}
+
+	public function test_a_failure_to_list_the_tracks_is_a_warning_too(): void {
+		$this->captionResponses = [ [ 'status' => 500, 'headers' => [], 'body' => '' ] ];
+		$service                = $this->service();
+		$service->enqueue( $this->video( 'v1', null, null, [ $this->track( 'u1', 'fr' ) ] ), 7, $this->metadata() );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertNotNull( $job->warning() );
+	}
+
+	public function test_no_subtitle_request_is_made_without_tracks_or_for_an_unfinished_job(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata() );
+		$service->process( 'job1', 600 );
+
+		$this->assertSame( [], $this->captionRequests );
+
+		$this->server           = new FakeUploadServer( strlen( self::CONTENT ) );
+		$this->server->putDelay = 10;
+		$service                = $this->service();
+		$service->enqueue( $this->video( 'v2', null, null, [ $this->track( 'u1', 'fr' ) ] ), 7, $this->metadata() );
+		$job = $service->process( 'job2', 15 );
+
+		$this->assertSame( UploadJob::STATUS_UPLOADING, $job->status() );
+		$this->assertSame( [], $this->captionRequests );
 	}
 }
