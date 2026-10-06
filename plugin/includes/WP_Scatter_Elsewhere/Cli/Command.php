@@ -12,7 +12,6 @@ use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
-use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
 
 /**
@@ -41,8 +40,8 @@ final class Command {
 			return;
 		}
 
-		$publications = PublicationFactory::store()->forPost( (int) $args[0] );
-		$rows         = [];
+		$service = WordPressFactory::uploadService();
+		$rows    = [];
 		foreach ( $videos as $video ) {
 			$languages = array_map( static fn( $track ) => (string) $track->language, array_filter( $video->subtitles, static fn( $track ) => $track->isUsable() ) );
 
@@ -52,7 +51,7 @@ final class Command {
 				'size'      => null !== $video->file ? size_format( $video->file->size ) : '',
 				'subtitles' => implode( ', ', $languages ),
 				'upload'    => $video->isUploadable() ? __( 'yes', 'wp-scatter-elsewhere' ) : (string) $video->reason,
-				'youtube'   => isset( $publications[ $video->id ] ) ? $publications[ $video->id ]->youtubeId : '',
+				'youtube'   => $service->publicationFor( (int) $args[0], $video->id )?->youtubeId ?? '',
 			];
 		}
 
