@@ -6,7 +6,7 @@
 
 	const { __, sprintf } = wp.i18n;
 	const { registerPlugin } = wp.plugins;
-	const { Button, Notice, SelectControl, Spinner } = wp.components;
+	const { Button, Notice, SelectControl, Spinner, Tooltip } = wp.components;
 	const { useSelect } = wp.data;
 	const { createElement: el, useEffect, useState } = wp.element;
 	const apiFetch = wp.apiFetch;
@@ -56,6 +56,29 @@
 		return sprintf( __( '%s MB', 'wp-scatter-elsewhere' ), Math.max( 1, Math.round( bytes / 1048576 ) ) );
 	};
 
+	// The privacy is the one requested when the video was uploaded: the plugin does not read it again from YouTube.
+	const PRIVACY_HELP = __( 'Privacy set when the video was uploaded. It may have changed since, for example in YouTube Studio: the plugin does not check it.', 'wp-scatter-elsewhere' );
+
+	const privacyInfo = function ( privacy ) {
+		const label = privacyLabel( privacy );
+
+		if ( ! label ) {
+			return null;
+		}
+
+		return el(
+			'span',
+			null,
+			' (' + label + ' ',
+			el(
+				Tooltip,
+				{ text: PRIVACY_HELP },
+				el( 'span', { tabIndex: 0, role: 'img', 'aria-label': PRIVACY_HELP, style: { cursor: 'help' } }, '\u24D8' )
+			),
+			')'
+		);
+	};
+
 	const errorMessage = function ( error ) {
 		return error && error.message ? error.message : __( 'The request failed.', 'wp-scatter-elsewhere' );
 	};
@@ -97,7 +120,7 @@
 					'p',
 					{ key: 'youtube', style: { margin: '0 0 4px' } },
 					el( 'a', { href: video.youtube.url, target: '_blank', rel: 'noopener noreferrer' }, __( 'Watch on YouTube', 'wp-scatter-elsewhere' ) ),
-					video.youtube.privacy ? ' (' + privacyLabel( video.youtube.privacy ) + ')' : ''
+					privacyInfo( video.youtube.privacy )
 				)
 			);
 		} else if ( active ) {

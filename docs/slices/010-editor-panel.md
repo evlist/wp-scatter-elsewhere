@@ -68,7 +68,10 @@ Errors are returned as REST errors with a readable message.
   - nothing yet: a **Publish to YouTube** button, with a choice of privacy and license
     (defaults from the settings, so private unless changed);
   - upload in progress: a progress bar and the state (queued, uploading, waiting to retry);
-  - done: the YouTube link, with the privacy, and the warnings of the job if any;
+  - done: the YouTube link, with the privacy followed by an info mark that explains that
+    it is the privacy set when the video was uploaded, which may have changed since (for
+    example in YouTube Studio) because the plugin does not check it, and the warnings of
+    the job if any;
   - failed: the error and a **Retry** button.
 - Polling every few seconds while an upload is in progress, and only then.
 - A video that already has a YouTube video shows its link and no button.
