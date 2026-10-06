@@ -93,6 +93,12 @@ or YouTube Studio:
 - **Other parameters** (category, location, made for kids, public statistics,
   targeting): lower priority, added later as settings with defaults.
 
+- **To schedule later:** updating the YouTube video of a post that was modified
+  after publication, and an optional review/edit of the metadata before an upload
+  or an update (see `docs/slices/README.md`). Language, license, thumbnail and
+  playlists are designed as operations that can also be applied to a video that is
+  already on YouTube, because an update costs far less quota than an upload.
+
 ## Video detection
 
 The theme adds videos and subtitle tracks at display time from attachments, so

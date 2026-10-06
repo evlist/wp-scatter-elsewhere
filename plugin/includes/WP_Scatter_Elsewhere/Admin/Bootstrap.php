@@ -5,12 +5,15 @@
 namespace WP_Scatter_Elsewhere\Admin;
 
 use WP_Scatter_Elsewhere\Cli\Command;
+use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
 
 class Bootstrap {
 
 	public static function init(): void {
 		new SettingsPage();
+
+		add_shortcode( 'scatter_elsewhere_youtube_link', [ PublicationFactory::class, 'shortcode' ] );
 
 		add_action(
 			WordPressFactory::UPLOAD_HOOK,

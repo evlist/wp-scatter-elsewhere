@@ -154,6 +154,10 @@ final class UploadJob {
 		return $this->data['created_at'];
 	}
 
+	public function updatedAt(): int {
+		return $this->data['updated_at'];
+	}
+
 	public function isActive(): bool {
 		return in_array( $this->status(), [ self::STATUS_QUEUED, self::STATUS_UPLOADING, self::STATUS_RETRY ], true );
 	}

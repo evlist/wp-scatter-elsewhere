@@ -5,6 +5,7 @@
 use PHPUnit\Framework\TestCase;
 use WP_Scatter_Elsewhere\Detection\DetectedVideo;
 use WP_Scatter_Elsewhere\Detection\LocalFile;
+use WP_Scatter_Elsewhere\Publication\PublicationStore;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\YouTube\AccessTokenProvider;
@@ -21,6 +22,9 @@ class UploadServiceTest extends TestCase {
 
 	/** @var array<string, array<string, mixed>> */
 	private array $stored = [];
+
+	/** @var array<int, array<string, array<string, mixed>>> Post meta by post id. */
+	private array $meta = [];
 
 	/** @var array<int, array{int, string}> */
 	private array $scheduled = [];
@@ -66,6 +70,12 @@ class UploadServiceTest extends TestCase {
 			new UploadSettings(
 				fn(): mixed => $this->settingsValue,
 				static function ( array $v ): void {}
+			),
+			new PublicationStore(
+				fn( int $postId ): mixed => $this->meta[ $postId ] ?? '',
+				function ( int $postId, array $value ): void {
+					$this->meta[ $postId ] = $value;
+				}
 			),
 			function ( int $when, string $id ): void {
 				$this->scheduled[] = [ $when, $id ];
@@ -126,12 +136,102 @@ class UploadServiceTest extends TestCase {
 		$this->assertCount( 1, $service->jobs() );
 	}
 
-	public function test_a_finished_job_does_not_block_a_new_one(): void {
+	public function test_a_finished_job_does_not_block_another_video_of_the_post(): void {
 		$service = $this->service();
 		$service->enqueue( $this->video(), 7, 'T', 'D' );
 		$service->process( 'job1', 600 );
 
-		$this->assertSame( 'job2', $service->enqueue( $this->video(), 7, 'T', 'D' )->id() );
+		$this->assertSame( 'job2', $service->enqueue( $this->video( 'v2' ), 7, 'T', 'D' )->id() );
+	}
+
+	public function test_a_completed_upload_is_recorded_on_the_post(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D', 'unlisted' );
+
+		$service->process( 'job1', 600 );
+
+		$this->assertSame(
+			[ 'v1' => [ 'youtube_id' => 'vid123', 'privacy' => 'unlisted', 'published_at' => 1000, 'job_id' => 'job1' ] ],
+			$this->meta[7]
+		);
+	}
+
+	public function test_an_unfinished_or_failed_upload_records_nothing(): void {
+		$this->server->script = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
+		$service              = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+
+		$service->process( 'job1', 600 );
+
+		$this->assertSame( [], $this->meta );
+	}
+
+	public function test_a_video_already_on_youtube_cannot_be_uploaded_again(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+
+		try {
+			$service->enqueue( $this->video(), 7, 'T', 'D' );
+			$this->fail( 'Expected an UploadException.' );
+		} catch ( UploadException $e ) {
+			$this->assertStringContainsString( 'https://www.youtube.com/watch?v=vid123', $e->getMessage() );
+		}
+
+		$this->assertCount( 1, $service->jobs() );
+	}
+
+	public function test_a_job_completed_before_publications_were_recorded_also_blocks_a_new_upload(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+		$this->meta = [];
+
+		$this->assertSame( 'vid123', $service->publicationFor( 7, 'v1' )->youtubeId );
+		$this->expectException( UploadException::class );
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+	}
+
+	public function test_force_uploads_again_and_replaces_the_record(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+		$service->process( 'job1', 600 );
+		$this->server = new FakeUploadServer( strlen( self::CONTENT ) );
+		$this->server->script = [ null, null, null, [ 'status' => 200, 'headers' => [], 'body' => '{"id":"second12345"}' ] ];
+		$service = $this->service();
+
+		$job = $service->enqueue( $this->video(), 7, 'T', 'D', null, true );
+		$service->process( $job->id(), 600 );
+
+		$this->assertSame( 'second12345', $this->meta[7]['v1']['youtube_id'] );
+		$this->assertSame( 'job2', $this->meta[7]['v1']['job_id'] );
+	}
+
+	public function test_link_records_an_existing_youtube_video(): void {
+		$service = $this->service();
+
+		$publication = $service->link( 7, 'v1', 'abcDEF_-123', 'public' );
+
+		$this->assertSame( 'https://www.youtube.com/watch?v=abcDEF_-123', $publication->url() );
+		$this->assertSame( [ 'v1' => [ 'youtube_id' => 'abcDEF_-123', 'privacy' => 'public', 'published_at' => 1000, 'job_id' => null ] ], $this->meta[7] );
+
+		$this->expectException( UploadException::class );
+		$service->enqueue( $this->video(), 7, 'T', 'D' );
+	}
+
+	public function test_link_rejects_invalid_ids_and_privacy(): void {
+		$service = $this->service();
+
+		foreach ( [ [ 'short', null ], [ 'has space!!', null ], [ 'abcDEF_-123', 'everyone' ] ] as [ $youtubeId, $privacy ] ) {
+			try {
+				$service->link( 7, 'v1', $youtubeId, $privacy );
+				$this->fail( 'Expected an UploadException for ' . $youtubeId );
+			} catch ( UploadException $e ) {
+				$this->assertNotSame( '', $e->getMessage() );
+			}
+		}
+
+		$this->assertSame( [], $this->meta );
 	}
 
 	public function test_process_uploads_and_does_not_reschedule_a_finished_job(): void {

@@ -5,6 +5,7 @@
 namespace WP_Scatter_Elsewhere\YouTube;
 
 use RuntimeException;
+use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\YouTube\Upload\ResumableUploader;
@@ -124,6 +125,7 @@ final class WordPressFactory {
 				static fn(): int => time()
 			),
 			self::uploadSettings(),
+			PublicationFactory::store(),
 			static function ( int $when, string $jobId ): void {
 				// Refused without effect when the same run is already scheduled.
 				wp_schedule_single_event( $when, self::UPLOAD_HOOK, [ $jobId ] );

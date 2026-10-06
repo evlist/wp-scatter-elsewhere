@@ -40,6 +40,8 @@ spl_autoload_register( function ( string $class ): void {
 	}
 } );
 
+require_once __DIR__ . '/includes/functions.php';
+
 add_action( 'plugins_loaded', function (): void {
 	WP_Scatter_Elsewhere\Admin\Bootstrap::init();
 } );

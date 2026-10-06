@@ -12,6 +12,7 @@ use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
+use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
 
 /**
@@ -40,7 +41,8 @@ final class Command {
 			return;
 		}
 
-		$rows = [];
+		$publications = PublicationFactory::store()->forPost( (int) $args[0] );
+		$rows         = [];
 		foreach ( $videos as $video ) {
 			$languages = array_map( static fn( $track ) => (string) $track->language, array_filter( $video->subtitles, static fn( $track ) => $track->isUsable() ) );
 
@@ -50,10 +52,11 @@ final class Command {
 				'size'      => null !== $video->file ? size_format( $video->file->size ) : '',
 				'subtitles' => implode( ', ', $languages ),
 				'upload'    => $video->isUploadable() ? __( 'yes', 'wp-scatter-elsewhere' ) : (string) $video->reason,
+				'youtube'   => isset( $publications[ $video->id ] ) ? $publications[ $video->id ]->youtubeId : '',
 			];
 		}
 
-		\WP_CLI\Utils\format_items( 'table', $rows, [ 'id', 'file', 'size', 'subtitles', 'upload' ] );
+		\WP_CLI\Utils\format_items( 'table', $rows, [ 'id', 'file', 'size', 'subtitles', 'upload', 'youtube' ] );
 	}
 
 	/**
@@ -69,6 +72,9 @@ final class Command {
 	 *
 	 * [--privacy=<privacy>]
 	 * : private, unlisted or public. Defaults to the setting, which is private unless changed.
+	 *
+	 * [--force]
+	 * : Upload even if the video is already on YouTube (for example after deleting it there).
 	 *
 	 * [--now]
 	 * : Run the upload in this terminal instead of waiting for WP-Cron.
@@ -88,7 +94,7 @@ final class Command {
 		$service  = WordPressFactory::uploadService();
 
 		try {
-			$job = $service->enqueue( $video, $postId, $metadata['title'], $metadata['description'], isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null );
+			$job = $service->enqueue( $video, $postId, $metadata['title'], $metadata['description'], isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null, ! empty( $assoc['force'] ) );
 		} catch ( UploadException $e ) {
 			WP_CLI::error( $e->getMessage() );
 		}
@@ -102,6 +108,39 @@ final class Command {
 		}
 
 		WP_CLI::success( __( 'The upload is scheduled and will run with WP-Cron.', 'wp-scatter-elsewhere' ) );
+	}
+
+	/**
+	 * Links a video that is already on YouTube to a video of a post, without uploading anything.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a published post.
+	 *
+	 * <video-id>
+	 * : The ID given by the "videos" command.
+	 *
+	 * <youtube-id>
+	 * : The YouTube video ID (the "v" parameter of its address).
+	 *
+	 * [--privacy=<privacy>]
+	 * : private, unlisted or public, when known. A video of unknown privacy is treated as shareable.
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function link( array $args, array $assoc ): void {
+		$postId = (int) $args[0];
+		$video  = $this->selectVideo( $this->detect( $postId ), $args[1] );
+
+		try {
+			$publication = WordPressFactory::uploadService()->link( $postId, $video->id, $args[2], isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null );
+		} catch ( UploadException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		WP_CLI::success( sprintf( /* translators: %s: YouTube address. */ __( 'Linked to %s', 'wp-scatter-elsewhere' ), $publication->url() ) );
 	}
 
 	/**

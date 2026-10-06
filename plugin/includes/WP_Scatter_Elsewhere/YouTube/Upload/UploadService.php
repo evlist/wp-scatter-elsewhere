@@ -7,6 +7,8 @@ namespace WP_Scatter_Elsewhere\YouTube\Upload;
 use Closure;
 use Throwable;
 use WP_Scatter_Elsewhere\Detection\DetectedVideo;
+use WP_Scatter_Elsewhere\Publication\Publication;
+use WP_Scatter_Elsewhere\Publication\PublicationStore;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 
 /**
@@ -22,6 +24,8 @@ final class UploadService {
 	private ResumableUploader $uploader;
 
 	private UploadSettings $settings;
+
+	private PublicationStore $publications;
 
 	/**
 	 * @var Closure(int, string): void
@@ -43,10 +47,11 @@ final class UploadService {
 	 * @param Closure(): int             $clock       Current Unix time.
 	 * @param Closure(): string          $idGenerator Returns a unique job id.
 	 */
-	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
+	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
 		$this->store       = $store;
 		$this->uploader    = $uploader;
-		$this->settings    = $settings;
+		$this->settings     = $settings;
+		$this->publications = $publications;
 		$this->scheduler   = $scheduler;
 		$this->clock       = $clock;
 		$this->idGenerator = $idGenerator;
@@ -56,9 +61,10 @@ final class UploadService {
 	 * Creates a job and schedules its first run.
 	 *
 	 * @param ?string $privacy Null for the default privacy of the settings.
+	 * @param bool    $force   Upload even when the video already has a YouTube video.
 	 * @throws UploadException When the job cannot be created.
 	 */
-	public function enqueue( DetectedVideo $video, int $postId, string $title, string $description, ?string $privacy = null ): UploadJob {
+	public function enqueue( DetectedVideo $video, int $postId, string $title, string $description, ?string $privacy = null, bool $force = false ): UploadJob {
 		$privacy ??= $this->settings->defaultPrivacy();
 
 		if ( ! UploadSettings::isValidPrivacy( $privacy ) ) {
@@ -81,6 +87,17 @@ final class UploadService {
 
 		if ( null !== $this->store->findActive( $postId, $video->id ) ) {
 			throw new UploadException( __( 'An upload of this video is already in progress.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$existing = $force ? null : $this->publicationFor( $postId, $video->id );
+		if ( null !== $existing ) {
+			throw new UploadException(
+				sprintf(
+					/* translators: %s: address of the YouTube video. */
+					__( 'This video is already on YouTube: %s', 'wp-scatter-elsewhere' ),
+					$existing->url()
+				)
+			);
 		}
 
 		$now = ( $this->clock )();
@@ -141,6 +158,10 @@ final class UploadService {
 		$result = $result->with( [ 'locked_until' => 0, 'updated_at' => ( $this->clock )() ] );
 		$this->store->save( $result );
 
+		if ( UploadJob::STATUS_DONE === $result->status() && null !== $result->youtubeId() ) {
+			$this->publications->save( $result->postId(), new Publication( $result->videoId(), $result->youtubeId(), $result->privacy(), ( $this->clock )(), $result->id() ) );
+		}
+
 		if ( UploadJob::STATUS_UPLOADING === $result->status() ) {
 			( $this->scheduler )( ( $this->clock )(), $result->id() );
 		} elseif ( UploadJob::STATUS_RETRY === $result->status() ) {
@@ -175,6 +196,47 @@ final class UploadService {
 		( $this->scheduler )( $now, $fresh->id() );
 
 		return $fresh;
+	}
+
+	/**
+	 * The YouTube video of a video of a post: the recorded one, or else the latest completed upload job
+	 * (uploads that finished before publications were recorded).
+	 */
+	public function publicationFor( int $postId, string $videoId ): ?Publication {
+		$recorded = $this->publications->get( $postId, $videoId );
+		if ( null !== $recorded ) {
+			return $recorded;
+		}
+
+		$found = null;
+		foreach ( $this->store->all() as $job ) {
+			if ( UploadJob::STATUS_DONE === $job->status() && null !== $job->youtubeId() && $job->postId() === $postId && $job->videoId() === $videoId ) {
+				$found = new Publication( $videoId, $job->youtubeId(), $job->privacy(), $job->updatedAt(), $job->id() );
+			}
+		}
+
+		return $found;
+	}
+
+	/**
+	 * Records an existing YouTube video as the one of a video of a post, without uploading anything.
+	 *
+	 * @param ?string $privacy Privacy of the video when known.
+	 * @throws UploadException When the YouTube id or the privacy is invalid.
+	 */
+	public function link( int $postId, string $videoId, string $youtubeId, ?string $privacy = null ): Publication {
+		if ( ! Publication::isValidYouTubeId( $youtubeId ) ) {
+			throw new UploadException( __( 'This is not a YouTube video ID (11 letters, digits, "-" or "_").', 'wp-scatter-elsewhere' ) );
+		}
+
+		if ( null !== $privacy && ! UploadSettings::isValidPrivacy( $privacy ) ) {
+			throw new UploadException( __( 'The privacy must be private, unlisted or public.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$publication = new Publication( $videoId, $youtubeId, $privacy, ( $this->clock )(), null );
+		$this->publications->save( $postId, $publication );
+
+		return $publication;
 	}
 
 	/**
