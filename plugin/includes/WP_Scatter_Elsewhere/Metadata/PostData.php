@@ -17,6 +17,7 @@ final class PostData {
 	/**
 	 * @param array<string, string[]> $terms             Term names keyed by taxonomy.
 	 * @param ?string                 $featuredImagePath Path of the original file of the featured image, if any.
+	 * @param array<string, array<int, array{slug: string, ancestors: string[]}>> $termDetails Slugs of the terms of the post by taxonomy, with the slugs of their ancestors.
 	 */
 	public function __construct(
 		public readonly string $title,
@@ -25,7 +26,8 @@ final class PostData {
 		public readonly DateTimeImmutable $date,
 		public readonly string $author,
 		public readonly array $terms = [],
-		public readonly ?string $featuredImagePath = null
+		public readonly ?string $featuredImagePath = null,
+		public readonly array $termDetails = []
 	) {
 	}
 }

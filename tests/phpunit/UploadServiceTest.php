@@ -11,7 +11,9 @@ use WP_Scatter_Elsewhere\Detection\SubtitleTrack;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
 use WP_Scatter_Elsewhere\YouTube\CaptionClient;
+use WP_Scatter_Elsewhere\Playlists\PlaylistService;
 use WP_Scatter_Elsewhere\Thumbnails\ThumbnailPreparer;
+use WP_Scatter_Elsewhere\YouTube\PlaylistClient;
 use WP_Scatter_Elsewhere\Thumbnails\ThumbnailService;
 use WP_Scatter_Elsewhere\YouTube\ThumbnailClient;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
@@ -45,6 +47,12 @@ class UploadServiceTest extends TestCase {
 
 	/** @var array<int, array{status: int, headers: array<string, string>, body: string}> */
 	private array $thumbnailResponses = [];
+
+	/** @var array<int, array{method: string, url: string, body: string}> Requests made to the playlists API. */
+	private array $playlistRequests = [];
+
+	/** @var array<int, array{status: int, headers: array<string, string>, body: string}> */
+	private array $playlistResponses = [];
 
 	/** @var array<int, array{int, string}> */
 	private array $scheduled = [];
@@ -122,6 +130,16 @@ class UploadServiceTest extends TestCase {
 				),
 				new ThumbnailPreparer( static fn( string $path, int $quality ): string|false => 'jpeg:' . $path . ':' . $quality )
 			),
+			new PlaylistService(
+				new PlaylistClient(
+					function ( string $method, string $url, array $headers, string $body ): array {
+						$this->playlistRequests[] = [ 'method' => $method, 'url' => $url, 'body' => $body ];
+
+						return array_shift( $this->playlistResponses ) ?? [ 'status' => 200, 'headers' => [], 'body' => '{"items":[]}' ];
+					},
+					$tokens
+				)
+			),
 			function ( int $when, string $id ): void {
 				$this->scheduled[] = [ $when, $id ];
 			},
@@ -130,8 +148,8 @@ class UploadServiceTest extends TestCase {
 		);
 	}
 
-	private function metadata( string $license = 'youtube', ?string $thumbnail = null ): VideoMetadata {
-		return new VideoMetadata( 'Title', 'Description', 'fr', $license, '2026-10-05T12:00:00Z', '22', $thumbnail );
+	private function metadata( string $license = 'youtube', ?string $thumbnail = null, array $keywords = [], array $playlists = [] ): VideoMetadata {
+		return new VideoMetadata( 'Title', 'Description', 'fr', $license, '2026-10-05T12:00:00Z', '22', $thumbnail, $keywords, $playlists );
 	}
 
 	/**
@@ -588,5 +606,45 @@ class UploadServiceTest extends TestCase {
 
 		$this->assertStringContainsString( 'Subtitles:', (string) $job->warning() );
 		$this->assertStringContainsString( ' | Thumbnail:', (string) $job->warning() );
+	}
+
+	public function test_keywords_and_playlists_are_stored_in_the_job(): void {
+		$job = $this->service()->enqueue( $this->video(), 7, $this->metadata( 'youtube', null, [ 'vanlife', 'Salers' ], [ 'PLaaaaaaaaaaa' ] ) );
+
+		$this->assertSame( [ 'vanlife', 'Salers' ], $job->keywords() );
+		$this->assertSame( [ 'PLaaaaaaaaaaa' ], $job->playlists() );
+	}
+
+	public function test_a_completed_upload_adds_the_video_to_the_playlists(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata( 'youtube', null, [], [ 'PLaaaaaaaaaaa', 'PLbbbbbbbbbbb' ] ) );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertNull( $job->warning() );
+		$this->assertSame( [ 'GET', 'POST', 'GET', 'POST' ], array_column( $this->playlistRequests, 'method' ) );
+		$this->assertStringContainsString( '"playlistId":"PLaaaaaaaaaaa"', $this->playlistRequests[1]['body'] );
+		$this->assertStringContainsString( '"videoId":"vid123"', $this->playlistRequests[1]['body'] );
+	}
+
+	public function test_a_playlist_problem_leaves_the_upload_done_with_a_warning(): void {
+		$this->playlistResponses = [ [ 'status' => 404, 'headers' => [], 'body' => '{"error":{"message":"Playlist not found."}}' ] ];
+		$service                 = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata( 'youtube', null, [], [ 'PLaaaaaaaaaaa' ] ) );
+
+		$job = $service->process( 'job1', 600 );
+
+		$this->assertSame( UploadJob::STATUS_DONE, $job->status() );
+		$this->assertStringStartsWith( 'Playlists:', (string) $job->warning() );
+		$this->assertStringContainsString( 'Playlist not found.', (string) $job->warning() );
+	}
+
+	public function test_no_playlist_request_is_made_without_playlists(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata() );
+		$service->process( 'job1', 600 );
+
+		$this->assertSame( [], $this->playlistRequests );
 	}
 }

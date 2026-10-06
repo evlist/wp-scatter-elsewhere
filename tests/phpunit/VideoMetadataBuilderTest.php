@@ -9,12 +9,15 @@ use WP_Scatter_Elsewhere\Metadata\TemplateParser;
 use WP_Scatter_Elsewhere\Metadata\TemplateRenderer;
 use WP_Scatter_Elsewhere\Metadata\VideoMetadataBuilder;
 use WP_Scatter_Elsewhere\Metadata\YouTubeTextNormalizer;
+use WP_Scatter_Elsewhere\Metadata\KeywordNormalizer;
+use WP_Scatter_Elsewhere\Rules\RuleMatcher;
 use WP_Scatter_Elsewhere\Settings\MetadataTemplateSettings;
+use WP_Scatter_Elsewhere\Settings\TermRuleSettings;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 
 class VideoMetadataBuilderTest extends TestCase {
 
-	private function builder( mixed $uploadSettings = [], string $locale = 'fr_FR' ): VideoMetadataBuilder {
+	private function builder( mixed $uploadSettings = [], string $locale = 'fr_FR', mixed $rules = [] ): VideoMetadataBuilder {
 		$parser = new TemplateParser();
 
 		return new VideoMetadataBuilder(
@@ -24,12 +27,15 @@ class VideoMetadataBuilderTest extends TestCase {
 				new YouTubeTextNormalizer()
 			),
 			new UploadSettings( static fn(): mixed => $uploadSettings, static function ( array $v ): void {} ),
+			new TermRuleSettings( static fn(): mixed => $rules, static function ( array $v ): void {} ),
+			new RuleMatcher(),
+			new KeywordNormalizer(),
 			static fn(): string => $locale
 		);
 	}
 
-	private function post( string $date = '2026-10-05 23:07:21', string $timezone = 'Europe/Paris', ?string $image = '/uploads/featured.jpg' ): PostData {
-		return new PostData( 'Grenoble ⇾ Salers', 'Une étape.', 'https://example.org/p/', new DateTimeImmutable( $date, new DateTimeZone( $timezone ) ), 'Eric', [], $image );
+	private function post( string $date = '2026-10-05 23:07:21', string $timezone = 'Europe/Paris', ?string $image = '/uploads/featured.jpg', array $details = [] ): PostData {
+		return new PostData( 'Grenoble ⇾ Salers', 'Une étape.', 'https://example.org/p/', new DateTimeImmutable( $date, new DateTimeZone( $timezone ) ), 'Eric', [], $image, $details );
 	}
 
 	public function test_builds_the_metadata_with_the_defaults(): void {
@@ -69,5 +75,40 @@ class VideoMetadataBuilderTest extends TestCase {
 		$this->assertSame( '/uploads/featured.jpg', $this->builder()->build( $this->post() )->thumbnailSource );
 		$this->assertNull( $this->builder( [ 'send_thumbnail' => false ] )->build( $this->post() )->thumbnailSource );
 		$this->assertNull( $this->builder()->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null ) )->thumbnailSource );
+	}
+
+	public function test_keywords_and_playlists_come_from_the_rules_of_the_terms_of_the_post(): void {
+		$rules   = [
+			[ 'taxonomy' => 'category', 'term' => 'vanlife', 'playlist_id' => 'PLvanlife12345', 'keyword' => 'vanlife', 'include_children' => false ],
+			[ 'taxonomy' => 'post_tag', 'term' => 'salers', 'playlist_id' => '', 'keyword' => 'Salers', 'include_children' => false ],
+			[ 'taxonomy' => 'category', 'term' => 'velo', 'playlist_id' => 'PLvelo1234567', 'keyword' => '', 'include_children' => false ],
+		];
+		$details = [
+			'category' => [ [ 'slug' => 'vanlife', 'ancestors' => [] ] ],
+			'post_tag' => [ [ 'slug' => 'salers', 'ancestors' => [] ] ],
+		];
+
+		$metadata = $this->builder( [], 'fr_FR', $rules )->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null, $details ) );
+
+		$this->assertSame( [ 'vanlife', 'Salers' ], $metadata->keywords );
+		$this->assertSame( [ 'PLvanlife12345' ], $metadata->playlists );
+		$this->assertSame( [], $metadata->droppedKeywords );
+	}
+
+	public function test_keywords_that_do_not_fit_are_reported(): void {
+		$rules   = [ [ 'taxonomy' => 'post_tag', 'term' => 'a', 'playlist_id' => '', 'keyword' => str_repeat( 'x', 300 ) ], [ 'taxonomy' => 'post_tag', 'term' => 'b', 'playlist_id' => '', 'keyword' => str_repeat( 'y', 300 ) ] ];
+		$details = [ 'post_tag' => [ [ 'slug' => 'a', 'ancestors' => [] ], [ 'slug' => 'b', 'ancestors' => [] ] ] ];
+
+		$metadata = $this->builder( [], 'fr_FR', $rules )->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null, $details ) );
+
+		$this->assertSame( [ str_repeat( 'x', 300 ) ], $metadata->keywords );
+		$this->assertSame( [ str_repeat( 'y', 300 ) ], $metadata->droppedKeywords );
+	}
+
+	public function test_without_rules_there_are_no_keywords_or_playlists(): void {
+		$metadata = $this->builder()->build( $this->post() );
+
+		$this->assertSame( [], $metadata->keywords );
+		$this->assertSame( [], $metadata->playlists );
 	}
 }

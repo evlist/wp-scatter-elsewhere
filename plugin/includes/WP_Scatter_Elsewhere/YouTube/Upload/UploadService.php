@@ -9,6 +9,7 @@ use Throwable;
 use WP_Scatter_Elsewhere\Detection\DetectedVideo;
 use WP_Scatter_Elsewhere\Publication\Publication;
 use WP_Scatter_Elsewhere\Publication\PublicationStore;
+use WP_Scatter_Elsewhere\Playlists\PlaylistService;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleService;
 use WP_Scatter_Elsewhere\Thumbnails\ThumbnailService;
@@ -35,6 +36,8 @@ final class UploadService {
 
 	private ThumbnailService $thumbnails;
 
+	private PlaylistService $playlists;
+
 	/**
 	 * @var Closure(int, string): void
 	 */
@@ -55,13 +58,14 @@ final class UploadService {
 	 * @param Closure(): int             $clock       Current Unix time.
 	 * @param Closure(): string          $idGenerator Returns a unique job id.
 	 */
-	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, SubtitleService $subtitles, ThumbnailService $thumbnails, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
+	public function __construct( UploadJobStore $store, ResumableUploader $uploader, UploadSettings $settings, PublicationStore $publications, SubtitleService $subtitles, ThumbnailService $thumbnails, PlaylistService $playlists, Closure $scheduler, Closure $clock, Closure $idGenerator ) {
 		$this->store       = $store;
 		$this->uploader    = $uploader;
 		$this->settings     = $settings;
 		$this->publications = $publications;
 		$this->subtitles    = $subtitles;
 		$this->thumbnails   = $thumbnails;
+		$this->playlists    = $playlists;
 		$this->scheduler   = $scheduler;
 		$this->clock       = $clock;
 		$this->idGenerator = $idGenerator;
@@ -132,6 +136,8 @@ final class UploadService {
 				'privacy'     => $privacy,
 				'subtitles'   => $this->subtitleTracks( $video ),
 				'thumbnail'   => $metadata->thumbnailSource,
+				'keywords'    => $metadata->keywords,
+				'playlists'   => $metadata->playlists,
 				'status'      => UploadJob::STATUS_QUEUED,
 				'created_at'  => $now,
 				'updated_at'  => $now,
@@ -193,7 +199,7 @@ final class UploadService {
 	}
 
 	/**
-	 * Sends what goes with a finished upload: the subtitles and the thumbnail. Best effort: the upload stays
+	 * Sends what goes with a finished upload: the subtitles, the thumbnail and the playlists. Best effort: the upload stays
 	 * done and the problems are kept as the warning of the job.
 	 */
 	private function finishUpload( UploadJob $job ): UploadJob {
@@ -229,6 +235,25 @@ final class UploadService {
 				$warnings[] = sprintf(
 					/* translators: %s: error message. */
 					__( 'Thumbnail: %s', 'wp-scatter-elsewhere' ),
+					$e->getMessage()
+				);
+			}
+		}
+
+		if ( [] !== $job->playlists() ) {
+			try {
+				$result = $this->playlists->addTo( $job->youtubeId(), $job->playlists() );
+				if ( $result->hasErrors() ) {
+					$warnings[] = sprintf(
+						/* translators: %s: errors per playlist. */
+						__( 'Playlists: %s', 'wp-scatter-elsewhere' ),
+						$result->errorSummary()
+					);
+				}
+			} catch ( YouTubeConnectionException $e ) {
+				$warnings[] = sprintf(
+					/* translators: %s: error message. */
+					__( 'Playlists: %s', 'wp-scatter-elsewhere' ),
 					$e->getMessage()
 				);
 			}

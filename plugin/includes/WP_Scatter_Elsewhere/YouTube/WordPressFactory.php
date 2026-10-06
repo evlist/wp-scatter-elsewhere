@@ -6,6 +6,7 @@ namespace WP_Scatter_Elsewhere\YouTube;
 
 use RuntimeException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
+use WP_Scatter_Elsewhere\Playlists\PlaylistService;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
@@ -131,6 +132,7 @@ final class WordPressFactory {
 			PublicationFactory::store(),
 			self::subtitleService(),
 			ThumbnailFactory::service(),
+			self::playlistService(),
 			static function ( int $when, string $jobId ): void {
 				// Refused without effect when the same run is already scheduled.
 				wp_schedule_single_event( $when, self::UPLOAD_HOOK, [ $jobId ] );
@@ -138,6 +140,14 @@ final class WordPressFactory {
 			static fn(): int => time(),
 			static fn(): string => 'j' . bin2hex( random_bytes( 6 ) )
 		);
+	}
+
+	public static function playlistClient(): PlaylistClient {
+		return new PlaylistClient( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
+	}
+
+	public static function playlistService(): PlaylistService {
+		return new PlaylistService( self::playlistClient() );
 	}
 
 	public static function captionClient(): CaptionClient {

@@ -7,6 +7,7 @@ namespace WP_Scatter_Elsewhere\YouTube;
 use Closure;
 use InvalidArgumentException;
 use RuntimeException;
+use WP_Scatter_Elsewhere\Metadata\KeywordNormalizer;
 
 /**
  * Changes properties of a video that is already on YouTube, keeping all the others.
@@ -19,7 +20,7 @@ final class VideoUpdater {
 	public const VIDEOS_ENDPOINT = 'https://www.googleapis.com/youtube/v3/videos';
 
 	/** Properties that can be changed, and the part of the video they belong to. */
-	public const FIELDS = [ 'title', 'description', 'language', 'license', 'recording_date' ];
+	public const FIELDS = [ 'title', 'description', 'language', 'license', 'recording_date', 'keywords' ];
 
 	/** Writable properties kept when the video is sent back, per part. */
 	private const KEPT = [
@@ -45,16 +46,19 @@ final class VideoUpdater {
 	}
 
 	/**
-	 * @param array<string, string> $changes Values by field name, among self::FIELDS. Fields not listed are kept.
+	 * @param array<string, string|string[]> $changes Values by field name, among self::FIELDS ("keywords" is a list that is added to
+	 *                                                the existing keywords). Fields not listed are kept.
+	 * @return string[] The new keywords that do not fit the limit of YouTube and were left out.
 	 * @throws InvalidArgumentException          When a field is unknown or has no value.
 	 * @throws VideoUpdateException              When the video cannot be read or updated.
 	 * @throws NotConnectedException             When the plugin is not connected.
 	 * @throws ReauthorizationRequiredException  When the authorisation was revoked.
 	 * @throws OAuthException                    When no access token can be obtained.
 	 */
-	public function update( string $youtubeId, array $changes ): void {
+	public function update( string $youtubeId, array $changes ): array {
 		foreach ( $changes as $field => $value ) {
-			if ( ! in_array( $field, self::FIELDS, true ) || '' === (string) $value ) {
+			$empty = is_array( $value ) ? [] === $value : '' === (string) $value;
+			if ( ! in_array( $field, self::FIELDS, true ) || $empty || ( is_array( $value ) && 'keywords' !== $field ) ) {
 				throw new InvalidArgumentException(
 					sprintf(
 						/* translators: %s: name of a video property. */
@@ -67,7 +71,8 @@ final class VideoUpdater {
 
 		$token   = $this->tokens->getAccessToken();
 		$current = $this->read( $youtubeId, $token );
-		$video   = $this->merge( $current, $changes );
+		$dropped = [];
+		$video   = $this->merge( $current, $changes, $dropped );
 
 		$parts = array_keys( array_filter( $video, 'is_array' ) );
 		$body  = array_merge( [ 'id' => $youtubeId ], $video );
@@ -86,6 +91,8 @@ final class VideoUpdater {
 		if ( 200 !== $response['status'] ) {
 			throw new VideoUpdateException( ApiErrors::describe( $response['status'], $response['body'] ) );
 		}
+
+		return $dropped;
 	}
 
 	/**
@@ -122,11 +129,12 @@ final class VideoUpdater {
 	/**
 	 * Keeps the writable properties of the current video and applies the changes.
 	 *
-	 * @param array<string, mixed>  $current
-	 * @param array<string, string> $changes
+	 * @param array<string, mixed>           $current
+	 * @param array<string, string|string[]> $changes
+	 * @param string[]                       $dropped Receives the new keywords that do not fit.
 	 * @return array<string, array<string, mixed>>
 	 */
-	private function merge( array $current, array $changes ): array {
+	private function merge( array $current, array $changes, array &$dropped ): array {
 		$video = [];
 		foreach ( self::KEPT as $part => $properties ) {
 			$source = is_array( $current[ $part ] ?? null ) ? $current[ $part ] : [];
@@ -142,6 +150,13 @@ final class VideoUpdater {
 		];
 
 		foreach ( $changes as $field => $value ) {
+			if ( 'keywords' === $field ) {
+				$merged                   = ( new KeywordNormalizer() )->add( (array) ( $video['snippet']['tags'] ?? [] ), (array) $value );
+				$video['snippet']['tags'] = $merged['kept'];
+				$dropped                  = $merged['dropped'];
+				continue;
+			}
+
 			[ $part, $property ] = $map[ $field ];
 
 			$video[ $part ][ $property ] = $value;

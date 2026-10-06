@@ -5,6 +5,8 @@
 namespace WP_Scatter_Elsewhere\Metadata;
 
 use Closure;
+use WP_Scatter_Elsewhere\Rules\RuleMatcher;
+use WP_Scatter_Elsewhere\Settings\TermRuleSettings;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\YouTube\VideoMetadata;
 
@@ -17,6 +19,12 @@ final class VideoMetadataBuilder {
 
 	private UploadSettings $settings;
 
+	private TermRuleSettings $rules;
+
+	private RuleMatcher $matcher;
+
+	private KeywordNormalizer $keywords;
+
 	/**
 	 * @var Closure(): string
 	 */
@@ -25,9 +33,12 @@ final class VideoMetadataBuilder {
 	/**
 	 * @param Closure(): string $siteLocale Returns the locale of the site, such as "fr_FR".
 	 */
-	public function __construct( MetadataComposer $composer, UploadSettings $settings, Closure $siteLocale ) {
+	public function __construct( MetadataComposer $composer, UploadSettings $settings, TermRuleSettings $rules, RuleMatcher $matcher, KeywordNormalizer $keywords, Closure $siteLocale ) {
 		$this->composer   = $composer;
 		$this->settings   = $settings;
+		$this->rules      = $rules;
+		$this->matcher    = $matcher;
+		$this->keywords   = $keywords;
 		$this->siteLocale = $siteLocale;
 	}
 
@@ -39,6 +50,9 @@ final class VideoMetadataBuilder {
 
 		$language = '' !== $this->settings->language() ? $this->settings->language() : LanguageResolver::fromLocale( ( $this->siteLocale )() );
 
+		$matched  = $this->matcher->match( $this->rules->rules(), $post );
+		$keywords = $this->keywords->fit( $matched->keywords );
+
 		return new VideoMetadata(
 			$text['title'],
 			$text['description'],
@@ -46,7 +60,10 @@ final class VideoMetadataBuilder {
 			$license ?? $this->settings->defaultLicense(),
 			$this->settings->sendsRecordingDate() ? $this->recordingDate( $post ) : null,
 			VideoMetadata::DEFAULT_CATEGORY_ID,
-			$this->settings->sendsThumbnail() ? $post->featuredImagePath : null
+			$this->settings->sendsThumbnail() ? $post->featuredImagePath : null,
+			$keywords['kept'],
+			$matched->playlists,
+			$keywords['dropped']
 		);
 	}
 

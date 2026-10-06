@@ -6,6 +6,7 @@ namespace WP_Scatter_Elsewhere\Admin;
 
 use InvalidArgumentException;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use WP_Scatter_Elsewhere\Rules\WordPressFactory as RulesFactory;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\YouTube\OAuthException;
@@ -23,6 +24,10 @@ class SettingsPage {
 	private const ACTION_DISCONNECT = 'wp_scatter_elsewhere_youtube_disconnect';
 	private const ACTION_TEMPLATES  = 'wp_scatter_elsewhere_save_templates';
 	private const ACTION_UPLOAD     = 'wp_scatter_elsewhere_save_upload_settings';
+	private const ACTION_RULES      = 'wp_scatter_elsewhere_save_term_rules';
+
+	/** Empty rows offered below the existing rules. */
+	private const BLANK_RULE_ROWS = 3;
 
 	private const NOTICE_ARG       = 'wp_scatter_elsewhere_notice';
 	private const ERROR_TRANSIENT  = 'wp_scatter_elsewhere_error_';
@@ -34,6 +39,7 @@ class SettingsPage {
 		add_action( 'admin_post_' . self::ACTION_DISCONNECT, [ $this, 'handleDisconnect' ] );
 		add_action( 'admin_post_' . self::ACTION_TEMPLATES, [ $this, 'handleSaveTemplates' ] );
 		add_action( 'admin_post_' . self::ACTION_UPLOAD, [ $this, 'handleSaveUploadSettings' ] );
+		add_action( 'admin_post_' . self::ACTION_RULES, [ $this, 'handleSaveRules' ] );
 		add_action( 'admin_post_' . WordPressFactory::CALLBACK_ACTION, [ $this, 'handleCallback' ] );
 	}
 
@@ -90,6 +96,43 @@ class SettingsPage {
 		}
 
 		$this->redirect( 'upload_saved' );
+	}
+
+	public function handleSaveRules(): void {
+		$this->guard( self::ACTION_RULES );
+
+		// Each value is sanitized below, field by field.
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.NonceVerification.Missing
+		$submitted = isset( $_POST['rules'] ) && is_array( $_POST['rules'] ) ? wp_unslash( $_POST['rules'] ) : [];
+
+		$rows = [];
+		foreach ( $submitted as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+
+			// The term is posted as "taxonomy:slug".
+			[ $taxonomy, $term ] = array_pad( explode( ':', sanitize_text_field( (string) ( $row['term'] ?? '' ) ), 2 ), 2, '' );
+
+			$rows[] = [
+				'taxonomy'         => $taxonomy,
+				'term'             => $term,
+				'playlist_id'      => sanitize_text_field( (string) ( $row['playlist_id'] ?? '' ) ),
+				'keyword'          => sanitize_text_field( (string) ( $row['keyword'] ?? '' ) ),
+				'include_children' => ! empty( $row['include_children'] ),
+				'remove'           => ! empty( $row['remove'] ),
+			];
+		}
+
+		try {
+			RulesFactory::settings()->save( $rows, RulesFactory::validator() );
+		} catch ( InvalidArgumentException $e ) {
+			$this->redirectWithError( $e->getMessage() );
+		}
+
+		RulesFactory::forgetPlaylistChoices();
+
+		$this->redirect( 'rules_saved' );
 	}
 
 	public function handleConnect(): void {
@@ -202,6 +245,8 @@ class SettingsPage {
 			<?php $this->renderTemplates(); ?>
 
 			<?php $this->renderUploadSettings(); ?>
+
+			<?php $this->renderRules(); ?>
 		</div>
 		<?php
 	}
@@ -245,6 +290,69 @@ class SettingsPage {
 				</li>
 			</ul>
 			<?php submit_button( __( 'Save templates', 'wp-scatter-elsewhere' ) ); ?>
+		</form>
+		<?php
+	}
+
+	private function renderRules(): void {
+		$rules     = RulesFactory::settings()->rules();
+		$playlists = RulesFactory::playlistChoices();
+		$taxonomies = get_taxonomies( [ 'public' => true, 'show_ui' => true ], 'objects' );
+
+		$rows = array_map( static fn( $rule ): array => $rule->toArray(), $rules );
+		for ( $i = 0; $i < self::BLANK_RULE_ROWS; $i++ ) {
+			$rows[] = [ 'taxonomy' => '', 'term' => '', 'playlist_id' => '', 'keyword' => '', 'include_children' => false ];
+		}
+		?>
+		<h3><?php echo esc_html__( 'Playlists and keywords', 'wp-scatter-elsewhere' ); ?></h3>
+		<p class="description"><?php echo esc_html__( 'The categories and tags of a post put its video in playlists and give it keywords. A row needs a playlist, a keyword, or both. Terms that are not listed are ignored. Nothing is removed when a post changes.', 'wp-scatter-elsewhere' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_RULES ); ?>" />
+			<?php wp_nonce_field( self::ACTION_RULES ); ?>
+			<datalist id="wpse-playlists">
+				<?php foreach ( $playlists as $id => $title ) : ?>
+					<option value="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $title ); ?></option>
+				<?php endforeach; ?>
+			</datalist>
+			<table class="widefat striped" style="max-width:60em">
+				<thead>
+					<tr>
+						<th><?php echo esc_html__( 'Term', 'wp-scatter-elsewhere' ); ?></th>
+						<th><?php echo esc_html__( 'Playlist', 'wp-scatter-elsewhere' ); ?></th>
+						<th><?php echo esc_html__( 'Keyword', 'wp-scatter-elsewhere' ); ?></th>
+						<th><?php echo esc_html__( 'Sub-terms', 'wp-scatter-elsewhere' ); ?></th>
+						<th><?php echo esc_html__( 'Remove', 'wp-scatter-elsewhere' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $rows as $index => $row ) : ?>
+						<tr>
+							<td>
+								<select name="rules[<?php echo esc_attr( (string) $index ); ?>][term]">
+									<option value=""></option>
+									<?php foreach ( $taxonomies as $taxonomy ) : ?>
+										<optgroup label="<?php echo esc_attr( $taxonomy->labels->name ); ?>">
+											<?php foreach ( (array) get_terms( [ 'taxonomy' => $taxonomy->name, 'hide_empty' => false ] ) as $term ) : ?>
+												<?php if ( $term instanceof \WP_Term ) : ?>
+													<option value="<?php echo esc_attr( $taxonomy->name . ':' . $term->slug ); ?>" <?php selected( $row['taxonomy'] . ':' . $row['term'], $taxonomy->name . ':' . $term->slug ); ?>><?php echo esc_html( $term->name ); ?></option>
+												<?php endif; ?>
+											<?php endforeach; ?>
+										</optgroup>
+									<?php endforeach; ?>
+								</select>
+							</td>
+							<td><input type="text" class="regular-text code" list="wpse-playlists" name="rules[<?php echo esc_attr( (string) $index ); ?>][playlist_id]" value="<?php echo esc_attr( $row['playlist_id'] ); ?>" /></td>
+							<td><input type="text" class="regular-text" name="rules[<?php echo esc_attr( (string) $index ); ?>][keyword]" value="<?php echo esc_attr( $row['keyword'] ); ?>" /></td>
+							<td><input type="checkbox" name="rules[<?php echo esc_attr( (string) $index ); ?>][include_children]" value="1" <?php checked( $row['include_children'] ); ?> title="<?php echo esc_attr__( 'Also apply to the posts that have a sub-term of this term', 'wp-scatter-elsewhere' ); ?>" /></td>
+							<td><input type="checkbox" name="rules[<?php echo esc_attr( (string) $index ); ?>][remove]" value="1" /></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+			<?php if ( [] === $playlists ) : ?>
+				<p class="description"><?php echo esc_html__( 'The playlists of the channel could not be read (not connected, or YouTube refused). A playlist ID can still be typed.', 'wp-scatter-elsewhere' ); ?></p>
+			<?php endif; ?>
+			<?php submit_button( __( 'Save rules', 'wp-scatter-elsewhere' ) ); ?>
 		</form>
 		<?php
 	}
@@ -372,6 +480,7 @@ class SettingsPage {
 			'disconnected' => __( 'Disconnected from YouTube.', 'wp-scatter-elsewhere' ),
 			'templates_saved' => __( 'Templates saved.', 'wp-scatter-elsewhere' ),
 			'upload_saved'    => __( 'Upload settings saved.', 'wp-scatter-elsewhere' ),
+			'rules_saved'     => __( 'Rules saved.', 'wp-scatter-elsewhere' ),
 		];
 
 		if ( isset( $messages[ $code ] ) ) {

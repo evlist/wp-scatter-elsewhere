@@ -40,6 +40,8 @@ final class UploadJob {
 		'warning'      => null,
 		'subtitles'    => [],
 		'thumbnail'    => null,
+		'keywords'     => [],
+		'playlists'    => [],
 		'created_at'   => 0,
 		'updated_at'   => 0,
 	];
@@ -182,6 +184,22 @@ final class UploadJob {
 	 */
 	public function subtitles(): array {
 		return $this->data['subtitles'];
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function keywords(): array {
+		return $this->data['keywords'];
+	}
+
+	/**
+	 * IDs of the playlists the video is put in once uploaded.
+	 *
+	 * @return string[]
+	 */
+	public function playlists(): array {
+		return $this->data['playlists'];
 	}
 
 	/**

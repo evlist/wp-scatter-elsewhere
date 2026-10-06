@@ -221,4 +221,38 @@ class VideoUpdaterTest extends TestCase {
 			$this->assertSame( [], $this->requests );
 		}
 	}
+
+	public function test_keywords_are_added_to_the_existing_ones(): void {
+		$this->responses = [ self::video(), [ 'status' => 200, 'headers' => [], 'body' => '{}' ] ];
+
+		$dropped = $this->updater()->update( 'abcDEF_-123', [ 'keywords' => [ 'B', 'vanlife', 'Salers' ] ] );
+
+		$this->assertSame( [], $dropped );
+		$this->assertSame( [ 'a', 'b', 'vanlife', 'Salers' ], $this->putBody()['snippet']['tags'] );
+		$this->assertSame( 'Old title', $this->putBody()['snippet']['title'] );
+	}
+
+	public function test_keywords_that_do_not_fit_are_returned_and_the_existing_ones_are_kept(): void {
+		$video = self::video();
+		$data  = json_decode( $video['body'], true );
+		$data['items'][0]['snippet']['tags'] = [ str_repeat( 'x', 490 ) ];
+		$video['body'] = (string) json_encode( $data );
+		$this->responses = [ $video, [ 'status' => 200, 'headers' => [], 'body' => '{}' ] ];
+
+		$dropped = $this->updater()->update( 'abcDEF_-123', [ 'keywords' => [ 'too long to add' ] ] );
+
+		$this->assertSame( [ 'too long to add' ], $dropped );
+		$this->assertSame( [ str_repeat( 'x', 490 ) ], $this->putBody()['snippet']['tags'] );
+	}
+
+	public function test_keywords_must_be_a_non_empty_list_and_other_fields_must_not_be_lists(): void {
+		foreach ( [ [ 'keywords' => [] ], [ 'title' => [ 'x' ] ] ] as $changes ) {
+			try {
+				$this->updater()->update( 'abcDEF_-123', $changes );
+				$this->fail( 'Expected an InvalidArgumentException.' );
+			} catch ( InvalidArgumentException $e ) {
+				$this->assertSame( [], $this->requests );
+			}
+		}
+	}
 }

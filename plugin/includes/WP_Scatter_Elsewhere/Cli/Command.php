@@ -108,6 +108,15 @@ final class Command {
 
 		/* translators: 1: job id, 2: video title, 3: privacy (private, unlisted or public). */
 		WP_CLI::log( sprintf( __( 'Upload %1$s created: "%2$s", privacy: %3$s.', 'wp-scatter-elsewhere' ), $job->id(), $job->title(), $job->privacy() ) );
+		if ( [] !== $metadata->keywords ) {
+			WP_CLI::log( sprintf( /* translators: %s: comma-separated keywords. */ __( 'Keywords: %s', 'wp-scatter-elsewhere' ), implode( ', ', $metadata->keywords ) ) );
+		}
+		if ( [] !== $metadata->droppedKeywords ) {
+			WP_CLI::warning( sprintf( /* translators: %s: comma-separated keywords. */ __( 'Keywords left out, they do not fit the limit of YouTube: %s', 'wp-scatter-elsewhere' ), implode( ', ', $metadata->droppedKeywords ) ) );
+		}
+		if ( [] !== $metadata->playlists ) {
+			WP_CLI::log( sprintf( /* translators: %s: comma-separated playlist IDs. */ __( 'Playlists, once uploaded: %s', 'wp-scatter-elsewhere' ), implode( ', ', $metadata->playlists ) ) );
+		}
 		/* translators: 1: license, 2: language code (may be empty), 3: recording date (may be empty). */
 		WP_CLI::log( sprintf( __( 'License: %1$s, language: %2$s, recording date: %3$s.', 'wp-scatter-elsewhere' ), $job->license(), (string) $job->language(), (string) $job->recordingDate() ) );
 
@@ -295,6 +304,76 @@ final class Command {
 	}
 
 	/**
+	 * Lists the playlists of the channel.
+	 */
+	public function playlists(): void {
+		try {
+			$playlists = WordPressFactory::playlistClient()->playlists();
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		if ( [] === $playlists ) {
+			WP_CLI::warning( __( 'The channel has no playlist.', 'wp-scatter-elsewhere' ) );
+			return;
+		}
+
+		$rows = [];
+		foreach ( $playlists as $id => $title ) {
+			$rows[] = [ 'id' => $id, 'title' => $title ];
+		}
+
+		\WP_CLI\Utils\format_items( 'table', $rows, [ 'id', 'title' ] );
+	}
+
+	/**
+	 * Puts the YouTube video recorded for a post in the playlists given by the rules of its terms.
+	 *
+	 * Playlists that already contain the video are skipped.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a post.
+	 *
+	 * [<video-id>]
+	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
+	 *
+	 * @subcommand playlists-add
+	 *
+	 * @param string[] $args
+	 */
+	public function playlists_add( array $args ): void {
+		$postId = (int) $args[0];
+		$post   = get_post( $postId );
+		if ( ! $post instanceof \WP_Post ) {
+			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$publication = $this->selectPublication( $postId, $args[1] ?? null );
+		$playlists   = MetadataFactory::videoMetadataBuilder()->build( MetadataFactory::postData( $post ) )->playlists;
+
+		if ( [] === $playlists ) {
+			WP_CLI::error( __( 'No rule gives a playlist to the terms of this post.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$result = WordPressFactory::playlistService()->addTo( $publication->youtubeId, $playlists );
+
+		foreach ( $result->added as $playlistId ) {
+			WP_CLI::log( sprintf( /* translators: %s: playlist ID. */ __( '%s: added', 'wp-scatter-elsewhere' ), $playlistId ) );
+		}
+		foreach ( $result->skipped as $playlistId ) {
+			WP_CLI::log( sprintf( /* translators: %s: playlist ID. */ __( '%s: already in the playlist', 'wp-scatter-elsewhere' ), $playlistId ) );
+		}
+
+		if ( $result->hasErrors() ) {
+			WP_CLI::error( $result->errorSummary() );
+		}
+
+		WP_CLI::success( __( 'Playlists done.', 'wp-scatter-elsewhere' ) );
+	}
+
+	/**
 	 * Applies properties of a post to the YouTube video recorded for it.
 	 *
 	 * ## OPTIONS
@@ -306,7 +385,7 @@ final class Command {
 	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
 	 *
 	 * [--fields=<fields>]
-	 * : Comma-separated list among language, license, recording_date, title and description.
+	 * : Comma-separated list among language, license, recording_date, keywords, title and description. The keywords of the rules are added to the existing ones.
 	 * ---
 	 * default: language,license,recording_date
 	 * ---
@@ -332,6 +411,7 @@ final class Command {
 			'language'       => $metadata->language,
 			'license'        => $metadata->license,
 			'recording_date' => $metadata->recordingDate,
+			'keywords'       => [] === $metadata->keywords ? null : $metadata->keywords,
 		];
 
 		$changes = [];
@@ -339,7 +419,7 @@ final class Command {
 			if ( ! in_array( $field, VideoUpdater::FIELDS, true ) ) {
 				WP_CLI::error( sprintf( /* translators: %s: field name. */ __( 'Unknown field: %s', 'wp-scatter-elsewhere' ), $field ) );
 			}
-			if ( null === $available[ $field ] || '' === $available[ $field ] ) {
+			if ( null === $available[ $field ] || '' === $available[ $field ] || [] === $available[ $field ] ) {
 				WP_CLI::warning( sprintf( /* translators: %s: field name. */ __( 'No value for %s, it is left unchanged.', 'wp-scatter-elsewhere' ), $field ) );
 				continue;
 			}
@@ -351,9 +431,13 @@ final class Command {
 		}
 
 		try {
-			WordPressFactory::videoUpdater()->update( $publication->youtubeId, $changes );
+			$dropped = WordPressFactory::videoUpdater()->update( $publication->youtubeId, $changes );
 		} catch ( InvalidArgumentException | YouTubeConnectionException $e ) {
 			WP_CLI::error( $e->getMessage() );
+		}
+
+		if ( [] !== $dropped ) {
+			WP_CLI::warning( sprintf( /* translators: %s: comma-separated keywords. */ __( 'Keywords left out, they do not fit the limit of YouTube: %s', 'wp-scatter-elsewhere' ), implode( ', ', $dropped ) ) );
 		}
 
 		WP_CLI::success(

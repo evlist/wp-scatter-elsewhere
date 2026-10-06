@@ -59,6 +59,14 @@ wp scatter-elsewhere retry <job-id> [--now]
   problem never fails the upload, it shows as a warning in `jobs`. To send it later:
   `wp scatter-elsewhere thumbnail <post-id> [<video-id>]`. YouTube only allows custom
   thumbnails on verified channels.
+- Playlists and keywords: on the settings page, a table gives each term (category, tag,
+  ...) an optional playlist and an optional keyword, and a checkbox to apply the rule to
+  the sub-terms too (off by default). The keywords are sent with the upload and the video
+  is added to the playlists once uploaded (a problem is a warning in `jobs`). For a video
+  already on YouTube: `wp scatter-elsewhere playlists-add <post-id>` and
+  `wp scatter-elsewhere apply-metadata <post-id> --fields=keywords` (the keywords are
+  added to the existing ones). `wp scatter-elsewhere playlists` lists your playlists.
+  Nothing is removed and nothing is updated automatically when a post changes.
 - To see what YouTube holds for the subtitles of a video (state, failure reason,
   automatic or creator track): `wp scatter-elsewhere captions <post-id> [<video-id>]`.
 - **Videos are private by default** (setting *Default privacy*), so tests do not

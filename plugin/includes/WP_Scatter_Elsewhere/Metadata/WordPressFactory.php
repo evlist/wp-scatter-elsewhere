@@ -6,6 +6,8 @@ namespace WP_Scatter_Elsewhere\Metadata;
 
 use DateTimeImmutable;
 use WP_Post;
+use WP_Scatter_Elsewhere\Rules\RuleMatcher;
+use WP_Scatter_Elsewhere\Rules\WordPressFactory as RulesFactory;
 use WP_Scatter_Elsewhere\Settings\MetadataTemplateSettings;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory as YouTubeFactory;
 
@@ -42,6 +44,23 @@ final class WordPressFactory {
 	}
 
 	/**
+	 * Slugs of the ancestors of a term (none for a flat taxonomy such as the tags).
+	 *
+	 * @return string[]
+	 */
+	private static function ancestorSlugs( \WP_Term $term, string $taxonomy ): array {
+		$slugs = [];
+		foreach ( get_ancestors( $term->term_id, $taxonomy, 'taxonomy' ) as $ancestorId ) {
+			$ancestor = get_term( (int) $ancestorId, $taxonomy );
+			if ( $ancestor instanceof \WP_Term ) {
+				$slugs[] = $ancestor->slug;
+			}
+		}
+
+		return $slugs;
+	}
+
+	/**
 	 * Path of the original file of the featured image of a post, or null.
 	 */
 	private static function featuredImagePath( WP_Post $post ): ?string {
@@ -59,6 +78,9 @@ final class WordPressFactory {
 		return new VideoMetadataBuilder(
 			self::composer(),
 			YouTubeFactory::uploadSettings(),
+			RulesFactory::settings(),
+			new RuleMatcher(),
+			new KeywordNormalizer(),
 			static fn(): string => (string) get_locale()
 		);
 	}
@@ -70,11 +92,19 @@ final class WordPressFactory {
 	public static function postData( WP_Post $post ): PostData {
 		$date = get_post_datetime( $post );
 
-		$terms = [];
+		$terms   = [];
+		$details = [];
 		foreach ( get_object_taxonomies( $post->post_type ) as $taxonomy ) {
 			$list = get_the_terms( $post, $taxonomy );
 			if ( is_array( $list ) ) {
-				$terms[ $taxonomy ] = array_map( static fn( $term ): string => $term->name, $list );
+				$terms[ $taxonomy ]   = array_map( static fn( $term ): string => $term->name, $list );
+				$details[ $taxonomy ] = array_map(
+					static fn( $term ): array => [
+						'slug'      => $term->slug,
+						'ancestors' => self::ancestorSlugs( $term, $taxonomy ),
+					],
+					$list
+				);
 			}
 		}
 
@@ -85,7 +115,8 @@ final class WordPressFactory {
 			$date instanceof DateTimeImmutable ? $date : new DateTimeImmutable( '@' . (int) get_post_time( 'U', true, $post ) ),
 			(string) get_the_author_meta( 'display_name', (int) $post->post_author ),
 			$terms,
-			self::featuredImagePath( $post )
+			self::featuredImagePath( $post ),
+			$details
 		);
 	}
 }

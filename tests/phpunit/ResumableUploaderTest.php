@@ -102,6 +102,7 @@ class ResumableUploaderTest extends TestCase {
 					'description' => 'Une belle randonnée.',
 					'privacy'     => 'private',
 					'language'    => 'fr',
+					'keywords'    => [ 'vanlife', 'Salers' ],
 					'license'     => 'creativeCommon',
 					'recording_date' => '2026-10-05T12:00:00Z',
 					'status'      => 'queued',
@@ -167,6 +168,7 @@ class ResumableUploaderTest extends TestCase {
 					'title'                => 'Tour du Mont Blanc',
 					'description'          => 'Une belle randonnée.',
 					'categoryId'           => '22',
+					'tags'                 => [ 'vanlife', 'Salers' ],
 					'defaultLanguage'      => 'fr',
 					'defaultAudioLanguage' => 'fr',
 				],
@@ -179,7 +181,7 @@ class ResumableUploaderTest extends TestCase {
 	}
 
 	public function test_language_and_recording_details_are_left_out_when_unknown(): void {
-		$this->uploader()->run( $this->job( [ 'language' => null, 'recording_date' => null ] ), 600 );
+		$this->uploader()->run( $this->job( [ 'language' => null, 'recording_date' => null, 'keywords' => [] ] ), 600 );
 
 		$init = $this->server->requests[0];
 		$this->assertSame( ResumableUploader::INIT_ENDPOINT . 'snippet,status', $init['url'] );
@@ -187,6 +189,7 @@ class ResumableUploaderTest extends TestCase {
 		$this->assertArrayNotHasKey( 'recordingDetails', $body );
 		$this->assertArrayNotHasKey( 'defaultLanguage', $body['snippet'] );
 		$this->assertArrayNotHasKey( 'defaultAudioLanguage', $body['snippet'] );
+		$this->assertArrayNotHasKey( 'tags', $body['snippet'] );
 		$this->assertSame( 'creativeCommon', $body['status']['license'] );
 	}
 

@@ -124,6 +124,9 @@ final class ResumableUploader {
 			'description' => $job->description(),
 			'categoryId'  => $job->categoryId(),
 		];
+		if ( [] !== $job->keywords() ) {
+			$snippet['tags'] = $job->keywords();
+		}
 		if ( null !== $job->language() ) {
 			$snippet['defaultLanguage']      = $job->language();
 			$snippet['defaultAudioLanguage'] = $job->language();
