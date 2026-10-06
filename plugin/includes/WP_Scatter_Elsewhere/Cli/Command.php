@@ -78,7 +78,7 @@ final class Command {
 	 * : private, unlisted or public. Defaults to the setting, which is private unless changed.
 	 *
 	 * [--license=<license>]
-	 * : youtube or creativeCommon. Defaults to the setting.
+	 * : youtube (standard YouTube license) or creativeCommon (Creative Commons - Attribution). Defaults to the setting.
 	 *
 	 * [--force]
 	 * : Upload even if the video is already on YouTube (for example after deleting it there).

@@ -253,8 +253,8 @@ class SettingsPage {
 		$settings = WordPressFactory::uploadSettings();
 		$current  = $settings->defaultPrivacy();
 		$licenses = [
-			UploadSettings::LICENSE_YOUTUBE         => __( 'Standard YouTube license', 'wp-scatter-elsewhere' ),
-			UploadSettings::LICENSE_CREATIVE_COMMON => __( 'Creative Commons (reuse allowed)', 'wp-scatter-elsewhere' ),
+			UploadSettings::LICENSE_YOUTUBE         => __( 'Standard YouTube License', 'wp-scatter-elsewhere' ),
+			UploadSettings::LICENSE_CREATIVE_COMMON => __( 'Creative Commons - Attribution (CC BY)', 'wp-scatter-elsewhere' ),
 		];
 		$labels   = [
 			UploadSettings::PRIVACY_PRIVATE  => __( 'Private (only you can see it)', 'wp-scatter-elsewhere' ),

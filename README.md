@@ -42,7 +42,9 @@ wp scatter-elsewhere jobs
 wp scatter-elsewhere retry <job-id> [--now]
 ```
 
-- Language (the site language by default), license (`youtube` by default) and
+- Language (the site language by default), license (`youtube`, the standard YouTube
+  license, by default; `creativeCommon` is the "Creative Commons - Attribution" license of
+  YouTube Studio) and
   recording date (the date of the post, sent as noon UTC) are sent with the
   upload. Set them on the settings page. To apply them to a video that is already
   on YouTube:

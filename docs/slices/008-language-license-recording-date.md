@@ -50,7 +50,8 @@ language, license and recording date, without touching YouTube Studio.
 ### 2. License
 
 - A setting **Default license**: `youtube` (the standard YouTube license, the
-  default) or `creativeCommon`.
+  default) or `creativeCommon`, which is the "Creative Commons - Attribution" license
+  of YouTube Studio (the only Creative Commons license YouTube offers).
 - An explicit license can be given for one upload; the later editor slice asks it
   at publication time.
 
