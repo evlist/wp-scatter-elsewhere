@@ -12,7 +12,8 @@ use RuntimeException;
  */
 final class VideoInspector {
 
-	public const ENDPOINT = 'https://www.googleapis.com/youtube/v3/videos?part=status&id=';
+	public const ENDPOINT         = 'https://www.googleapis.com/youtube/v3/videos?part=status&id=';
+	public const DETAILS_ENDPOINT = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=';
 
 	/**
 	 * @var Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string}
@@ -36,8 +37,40 @@ final class VideoInspector {
 	 * @throws VideoUpdateException When the video cannot be read or is not on the connected channel.
 	 */
 	public function privacy( string $youtubeId ): string {
+		$item    = $this->read( self::ENDPOINT . rawurlencode( $youtubeId ), $youtubeId );
+		$privacy = (string) ( $item['status']['privacyStatus'] ?? '' );
+
+		if ( '' === $privacy ) {
+			throw $this->notFound( $youtubeId );
+		}
+
+		return $privacy;
+	}
+
+	/**
+	 * The title, privacy, upload date and channel of a video.
+	 *
+	 * @throws VideoUpdateException When the video cannot be read or does not exist.
+	 */
+	public function details( string $youtubeId ): VideoDetails {
+		$item = $this->read( self::DETAILS_ENDPOINT . rawurlencode( $youtubeId ), $youtubeId );
+
+		return new VideoDetails(
+			$youtubeId,
+			(string) ( $item['snippet']['title'] ?? '' ),
+			(string) ( $item['status']['privacyStatus'] ?? '' ),
+			(string) ( $item['snippet']['publishedAt'] ?? '' ),
+			(string) ( $item['snippet']['channelId'] ?? '' )
+		);
+	}
+
+	/**
+	 * @return array<string, mixed> The first item of the answer.
+	 * @throws VideoUpdateException
+	 */
+	private function read( string $url, string $youtubeId ): array {
 		try {
-			$response = ( $this->http )( 'GET', self::ENDPOINT . rawurlencode( $youtubeId ), [ 'Authorization' => 'Bearer ' . $this->tokens->getAccessToken() ], '' );
+			$response = ( $this->http )( 'GET', $url, [ 'Authorization' => 'Bearer ' . $this->tokens->getAccessToken() ], '' );
 		} catch ( RuntimeException $e ) {
 			throw new VideoUpdateException(
 				sprintf(
@@ -52,19 +85,23 @@ final class VideoInspector {
 			throw new VideoUpdateException( ApiErrors::describe( $response['status'], $response['body'] ) );
 		}
 
-		$data    = json_decode( $response['body'], true );
-		$privacy = is_array( $data ) ? (string) ( $data['items'][0]['status']['privacyStatus'] ?? '' ) : '';
+		$data = json_decode( $response['body'], true );
+		$item = is_array( $data ) ? ( $data['items'][0] ?? null ) : null;
 
-		if ( '' === $privacy ) {
-			throw new VideoUpdateException(
-				sprintf(
-					/* translators: %s: YouTube video id. */
-					__( 'The video %s was not found on the connected channel.', 'wp-scatter-elsewhere' ),
-					$youtubeId
-				)
-			);
+		if ( ! is_array( $item ) ) {
+			throw $this->notFound( $youtubeId );
 		}
 
-		return $privacy;
+		return $item;
+	}
+
+	private function notFound( string $youtubeId ): VideoUpdateException {
+		return new VideoUpdateException(
+			sprintf(
+				/* translators: %s: YouTube video id. */
+				__( 'The video %s was not found on the connected channel.', 'wp-scatter-elsewhere' ),
+				$youtubeId
+			)
+		);
 	}
 }

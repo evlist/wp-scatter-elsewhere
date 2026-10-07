@@ -324,12 +324,31 @@ final class UploadService {
 
 		$found = null;
 		foreach ( $this->store->all() as $job ) {
-			if ( UploadJob::STATUS_DONE === $job->status() && null !== $job->youtubeId() && $job->postId() === $postId && $job->videoId() === $videoId ) {
+			if ( UploadJob::STATUS_DONE === $job->status() && ! $job->isUnlinked() && null !== $job->youtubeId() && $job->postId() === $postId && $job->videoId() === $videoId ) {
 				$found = new Publication( $videoId, $job->youtubeId(), $job->privacy(), $job->updatedAt(), $job->id() );
 			}
 		}
 
 		return $found;
+	}
+
+	/**
+	 * Removes the link between a video of a post and its YouTube video. Nothing is changed on YouTube.
+	 * The finished upload jobs of the video stop counting, so that the video can be linked or uploaded again.
+	 *
+	 * @return bool Whether there was a link.
+	 */
+	public function unlink( int $postId, string $videoId ): bool {
+		$existed = $this->publications->remove( $postId, $videoId );
+
+		foreach ( $this->store->all() as $job ) {
+			if ( UploadJob::STATUS_DONE === $job->status() && ! $job->isUnlinked() && null !== $job->youtubeId() && $job->postId() === $postId && $job->videoId() === $videoId ) {
+				$this->store->save( $job->with( [ 'unlinked' => 1 ] ) );
+				$existed = true;
+			}
+		}
+
+		return $existed;
 	}
 
 	/**

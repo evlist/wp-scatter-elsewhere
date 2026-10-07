@@ -97,6 +97,10 @@ class YouTubeSettings {
 		return $this->all()['status'];
 	}
 
+	public function channelId(): string {
+		return $this->all()['channel_id'];
+	}
+
 	public function channelTitle(): string {
 		return $this->all()['channel_title'];
 	}

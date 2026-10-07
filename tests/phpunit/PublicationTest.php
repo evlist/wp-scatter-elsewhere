@@ -95,4 +95,15 @@ class PublicationTest extends TestCase {
 		$this->assertNull( Publication::fromArray( 'a', $never->toArray() )->checkedAt );
 		$this->assertSame( 99, Publication::fromArray( 'a', $checked->toArray() )->checkedAt );
 	}
+
+	public function test_a_record_can_be_removed(): void {
+		$store = $this->store();
+		$store->save( 7, new Publication( 'a', 'aaaaaaaaaaa', 'private', 1, null ) );
+		$store->save( 7, new Publication( 'b', 'bbbbbbbbbbb', 'public', 2, null ) );
+
+		$this->assertTrue( $store->remove( 7, 'a' ) );
+		$this->assertSame( [ 'b' ], array_keys( $store->forPost( 7 ) ) );
+		$this->assertFalse( $store->remove( 7, 'a' ) );
+		$this->assertFalse( $store->remove( 8, 'a' ) );
+	}
 }

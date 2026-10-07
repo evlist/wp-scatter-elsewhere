@@ -15,6 +15,7 @@ use WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory;
 use WP_Scatter_Elsewhere\Editor\PostYouTubeState;
 use WP_Scatter_Elsewhere\Editor\UploadRequestValidator;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use WP_Scatter_Elsewhere\Publication\LinkException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
@@ -79,6 +80,18 @@ final class YouTubeController {
 				'permission_callback' => [ $this, 'canUsePostPanel' ],
 			]
 		);
+
+		foreach ( [ 'link-preview' => 'linkPreview', 'link' => 'link', 'unlink' => 'unlink' ] as $route => $callback ) {
+			register_rest_route(
+				self::NAMESPACE,
+				'/post/(?P<id>\d+)/youtube/' . $route,
+				[
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => [ $this, $callback ],
+					'permission_callback' => [ $this, 'canUsePostPanel' ],
+				]
+			);
+		}
 
 		register_rest_route(
 			self::NAMESPACE,
@@ -210,6 +223,81 @@ final class YouTubeController {
 	}
 
 	/**
+	 * Reads and checks a YouTube video that the author wants to link, and says where it is already linked.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function linkPreview( WP_REST_Request $request ) {
+		try {
+			$preview = PublicationFactory::linkService()->preview( (int) $request['id'], (string) $request->get_param( 'video_id' ), (string) $request->get_param( 'address' ) );
+		} catch ( LinkException $e ) {
+			return $this->linkError( $e );
+		}
+
+		return new WP_REST_Response(
+			[
+				'preview' => [
+					'youtube_id'     => $preview->youtubeId,
+					'title'          => $preview->title,
+					'privacy'        => $preview->privacy,
+					'published_at'   => $preview->publishedAt,
+					'channel_checked' => $preview->channelChecked,
+					'linked_to'      => $this->describeLink( $preview->linkedTo ),
+				],
+			]
+		);
+	}
+
+	/**
+	 * Links a YouTube video that is already there to a video of the post.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function link( WP_REST_Request $request ) {
+		$post = get_post( (int) $request['id'] );
+		if ( ! $post instanceof WP_Post || 'publish' !== $post->post_status ) {
+			return new WP_Error( 'wp_scatter_elsewhere_not_published', __( 'Only a published post can be linked to a YouTube video.', 'wp-scatter-elsewhere' ), [ 'status' => 400 ] );
+		}
+
+		$videoId = (string) $request->get_param( 'video_id' );
+
+		try {
+			$videos = WordPressDetectorFactory::create()->detect( $post->ID );
+		} catch ( DetectionException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_detection', $e->getMessage(), [ 'status' => 400 ] );
+		}
+
+		if ( [] === array_filter( $videos, static fn( DetectedVideo $video ): bool => $video->id === $videoId ) ) {
+			return new WP_Error( 'wp_scatter_elsewhere_invalid_request', __( 'This video is not in the page of the post.', 'wp-scatter-elsewhere' ), [ 'status' => 400 ] );
+		}
+
+		try {
+			$publication = PublicationFactory::linkService()->link( $post->ID, $videoId, (string) $request->get_param( 'address' ), (bool) $request->get_param( 'confirm_move' ) );
+		} catch ( LinkException $e ) {
+			return $this->linkError( $e );
+		}
+
+		$status = ( new PostYouTubeState() )->statuses( [ $videoId => $publication ], [] )[ $videoId ];
+
+		return new WP_REST_Response( [ 'videos' => [ $videoId => [ 'youtube' => $status['youtube'] ] ] ] );
+	}
+
+	/**
+	 * Removes the link of a video of the post with its YouTube video. YouTube is left untouched.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function unlink( WP_REST_Request $request ) {
+		$videoId = (string) $request->get_param( 'video_id' );
+
+		if ( ! PublicationFactory::linkService()->unlink( (int) $request['id'], $videoId ) ) {
+			return new WP_Error( 'wp_scatter_elsewhere_no_youtube_video', __( 'No YouTube video is linked to this video.', 'wp-scatter-elsewhere' ), [ 'status' => 404 ] );
+		}
+
+		return new WP_REST_Response( [ 'videos' => [ $videoId => [ 'youtube' => null ] ] ] );
+	}
+
+	/**
 	 * Reads the real privacy of the YouTube video of a video of the post, and records it.
 	 *
 	 * @return WP_REST_Response|WP_Error
@@ -253,6 +341,29 @@ final class YouTubeController {
 				'videos' => ( new PostYouTubeState() )->statuses( $this->publications( $service, $job->postId(), [ $job->videoId() ] ), [ $job->videoId() => $job ] ),
 			]
 		);
+	}
+
+	/**
+	 * @param array{post_id: int, video_id: string}|null $link
+	 * @return array{post_id: int, video_id: string, title: string, edit_url: string}|null
+	 */
+	private function describeLink( ?array $link ): ?array {
+		if ( null === $link ) {
+			return null;
+		}
+
+		return [
+			'post_id'  => $link['post_id'],
+			'video_id' => $link['video_id'],
+			'title'    => wp_strip_all_tags( get_the_title( $link['post_id'] ) ),
+			'edit_url' => (string) get_edit_post_link( $link['post_id'], 'raw' ),
+		];
+	}
+
+	private function linkError( LinkException $e ): WP_Error {
+		$data = [ 'status' => 'already_linked' === $e->errorCode() ? 409 : 400, 'code' => $e->errorCode() ];
+
+		return new WP_Error( 'wp_scatter_elsewhere_link_' . $e->errorCode(), $e->getMessage(), $data );
 	}
 
 	/**

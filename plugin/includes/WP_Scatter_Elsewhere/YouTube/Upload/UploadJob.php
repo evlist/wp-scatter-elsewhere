@@ -42,6 +42,7 @@ final class UploadJob {
 		'thumbnail'    => null,
 		'keywords'     => [],
 		'playlists'    => [],
+		'unlinked'     => 0,
 		'created_at'   => 0,
 		'updated_at'   => 0,
 	];
@@ -207,6 +208,13 @@ final class UploadJob {
 	 */
 	public function thumbnail(): ?string {
 		return $this->data['thumbnail'];
+	}
+
+	/**
+	 * Whether the YouTube video of this finished job was unlinked from its video of the blog.
+	 */
+	public function isUnlinked(): bool {
+		return 1 === $this->data['unlinked'];
 	}
 
 	public function createdAt(): int {

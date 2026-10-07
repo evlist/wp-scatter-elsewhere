@@ -58,6 +58,22 @@ class PublicationStore {
 		return $publications;
 	}
 
+	/**
+	 * Removes the record of a video; true when there was one.
+	 */
+	public function remove( int $postId, string $videoId ): bool {
+		$all = $this->forPost( $postId );
+		if ( ! isset( $all[ $videoId ] ) ) {
+			return false;
+		}
+
+		unset( $all[ $videoId ] );
+
+		( $this->saver )( $postId, array_map( static fn( Publication $item ): array => $item->toArray(), $all ) );
+
+		return true;
+	}
+
 	public function save( int $postId, Publication $publication ): void {
 		$all                         = $this->forPost( $postId );
 		$all[ $publication->videoId ] = $publication;

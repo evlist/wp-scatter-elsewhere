@@ -6,7 +6,7 @@
 
 	const { __, sprintf } = wp.i18n;
 	const { registerPlugin } = wp.plugins;
-	const { Button, Notice, SelectControl, Spinner, Tooltip } = wp.components;
+	const { Button, Notice, SelectControl, Spinner, TextControl, Tooltip } = wp.components;
 	const { useSelect } = wp.data;
 	const { createElement: el, useEffect, useState } = wp.element;
 	const apiFetch = wp.apiFetch;
@@ -83,6 +83,12 @@
 		);
 	};
 
+	const formatDate = function ( isoDate ) {
+		const date = new Date( isoDate );
+
+		return isNaN( date.getTime() ) ? '' : date.toLocaleDateString();
+	};
+
 	const errorMessage = function ( error ) {
 		return error && error.message ? error.message : __( 'The request failed.', 'wp-scatter-elsewhere' );
 	};
@@ -91,7 +97,7 @@
 	 * One video of the post: its details, and its state or the controls to upload it.
 	 */
 	const VideoRow = function ( props ) {
-		const { video, privacy, license, busy, onUpload, onRetry, onCheck } = props;
+		const { postId, video, privacy, license, busy, onUpload, onRetry, onCheck, onUnlink } = props;
 		const job = video.job;
 		const active = job && ACTIVE_STATUSES.includes( job.status );
 		const languages = ( video.subtitles || [] )
@@ -136,6 +142,18 @@
 							onClick: () => onCheck( video.id ),
 						},
 						__( 'Check on YouTube', 'wp-scatter-elsewhere' )
+					),
+					' ',
+					el(
+						Button,
+						{
+							variant: 'link',
+							isSmall: true,
+							isDestructive: true,
+							disabled: !! busy,
+							onClick: () => onUnlink( video.id ),
+						},
+						__( 'Unlink', 'wp-scatter-elsewhere' )
 					)
 				)
 			);
@@ -176,6 +194,10 @@
 					__( 'Publish to YouTube', 'wp-scatter-elsewhere' )
 				)
 			);
+		}
+
+		if ( ! video.youtube && ! active ) {
+			children.push( el( LinkForm, { key: 'link', postId: postId, videoId: video.id } ) );
 		}
 
 		if ( video.job && video.job.warning && ! active ) {
@@ -282,6 +304,113 @@
 	};
 
 	/**
+	 * Links a video of the post to a video that is already on YouTube: the address is looked up, the video is
+	 * shown for confirmation, and nothing is recorded before the author agrees.
+	 */
+	const LinkForm = function ( props ) {
+		const { postId, videoId } = props;
+		const [ open, setOpen ] = useState( false );
+		const [ address, setAddress ] = useState( '' );
+		const [ preview, setPreview ] = useState( null );
+		const [ working, setWorking ] = useState( false );
+		const [ failure, setFailure ] = useState( '' );
+
+		const close = function () {
+			setOpen( false );
+			setAddress( '' );
+			setPreview( null );
+			setFailure( '' );
+		};
+
+		if ( ! open ) {
+			return el( 'p', { style: { margin: '8px 0 0' } }, el( Button, { variant: 'link', onClick: () => setOpen( true ) }, __( 'Link a video that is already on YouTube', 'wp-scatter-elsewhere' ) ) );
+		}
+
+		const lookUp = function () {
+			setWorking( true );
+			setFailure( '' );
+			setPreview( null );
+
+			apiFetch( { path: NAMESPACE + '/post/' + postId + '/youtube/link-preview', method: 'POST', data: { video_id: videoId, address: address } } )
+				.then( ( response ) => setPreview( response.preview ) )
+				.catch( ( error ) => setFailure( errorMessage( error ) ) )
+				.finally( () => setWorking( false ) );
+		};
+
+		const link = function () {
+			setWorking( true );
+			setFailure( '' );
+
+			apiFetch( {
+				path: NAMESPACE + '/post/' + postId + '/youtube/link',
+				method: 'POST',
+				data: { video_id: videoId, address: address, confirm_move: !! preview.linked_to },
+			} )
+				.then( ( response ) => {
+					mergeStatuses( response.videos );
+					close();
+				} )
+				.catch( ( error ) => {
+					setFailure( errorMessage( error ) );
+					setWorking( false );
+				} );
+		};
+
+		const children = [
+			el( TextControl, {
+				key: 'address',
+				label: __( 'YouTube address or video ID', 'wp-scatter-elsewhere' ),
+				value: address,
+				onChange: ( value ) => {
+					setAddress( value );
+					setPreview( null );
+				},
+				__nextHasNoMarginBottom: true,
+			} ),
+		];
+
+		if ( failure ) {
+			children.push( el( Notice, { key: 'failure', status: 'error', isDismissible: false }, failure ) );
+		}
+
+		if ( preview ) {
+			const details = [ privacyLabel( preview.privacy ), formatDate( preview.published_at ) ].filter( Boolean ).join( ', ' );
+
+			children.push(
+				el( 'p', { key: 'found', style: { margin: '8px 0 4px', fontWeight: 600 } }, preview.title ),
+				el( 'p', { key: 'details', style: { margin: '0 0 4px' } }, details ),
+				preview.channel_checked ? null : el( 'p', { key: 'unchecked', style: { margin: '0 0 4px', color: '#757575' } }, __( 'The connected channel is not known, so the video could not be checked to belong to it.', 'wp-scatter-elsewhere' ) ),
+				preview.linked_to
+					? el(
+						Notice,
+						{ key: 'linked', status: 'warning', isDismissible: false },
+						sprintf(
+							/* translators: %s: title of another post. */
+							__( 'This YouTube video is already linked to a video of "%s". Linking it here removes it from there.', 'wp-scatter-elsewhere' ),
+							preview.linked_to.title
+						),
+						' ',
+						preview.linked_to.edit_url ? el( 'a', { href: preview.linked_to.edit_url, target: '_blank', rel: 'noopener noreferrer' }, __( 'Open that post', 'wp-scatter-elsewhere' ) ) : null
+					)
+					: null,
+				el(
+					Button,
+					{ key: 'confirm', variant: 'primary', isBusy: working, disabled: working, onClick: link },
+					preview.linked_to ? __( 'Move the link here', 'wp-scatter-elsewhere' ) : __( 'Link this video', 'wp-scatter-elsewhere' )
+				)
+			);
+		} else {
+			children.push(
+				el( Button, { key: 'lookup', variant: 'secondary', isBusy: working, disabled: working || '' === address.trim(), onClick: lookUp }, __( 'Look up', 'wp-scatter-elsewhere' ) )
+			);
+		}
+
+		children.push( ' ', el( Button, { key: 'cancel', variant: 'tertiary', disabled: working, onClick: close }, __( 'Cancel', 'wp-scatter-elsewhere' ) ) );
+
+		return el( 'div', { style: { marginTop: '8px' } }, children );
+	};
+
+	/**
 	 * The content of the panel, used both after publication and in the sidebar.
 	 */
 	const YouTubePanel = function () {
@@ -317,6 +446,19 @@
 				method: 'POST',
 				data: { video_id: videoId },
 			} );
+
+		const unlink = ( videoId ) => {
+			// eslint-disable-next-line no-alert
+			if ( ! window.confirm( __( 'Remove the link to the YouTube video? Nothing is changed on YouTube.', 'wp-scatter-elsewhere' ) ) ) {
+				return undefined;
+			}
+
+			return send( postId, 'unlink:' + videoId, {
+				path: NAMESPACE + '/post/' + postId + '/youtube/unlink',
+				method: 'POST',
+				data: { video_id: videoId },
+			} );
+		};
 
 		const retry = ( jobId ) => send( postId, jobId, { path: NAMESPACE + '/job/' + jobId + '/retry', method: 'POST' } );
 
@@ -385,7 +527,7 @@
 		}
 
 		data.videos.forEach( ( video ) => {
-			children.push( el( VideoRow, { key: video.id, video: video, privacy: privacy, license: license, busy: busy, onUpload: upload, onRetry: retry, onCheck: check } ) );
+			children.push( el( VideoRow, { key: video.id, video: video, privacy: privacy, license: license, busy: busy, postId: postId, onUpload: upload, onRetry: retry, onCheck: check, onUnlink: unlink } ) );
 		} );
 
 		return el( 'div', null, children );

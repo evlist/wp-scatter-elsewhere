@@ -116,4 +116,21 @@ class VideoInspectorTest extends TestCase {
 			$this->assertSame( [], $this->meta );
 		}
 	}
+
+	public function test_reads_the_details_of_a_video(): void {
+		$this->response = [ 'status' => 200, 'headers' => [], 'body' => (string) json_encode( [ 'items' => [ [ 'snippet' => [ 'title' => 'Grenoble ⇾ Salers', 'publishedAt' => '2026-10-05T20:00:00Z', 'channelId' => 'UC1' ], 'status' => [ 'privacyStatus' => 'unlisted' ] ] ] ] ) ];
+
+		$details = $this->inspector()->details( 'abcDEF_-123' );
+
+		$this->assertSame( [ 'abcDEF_-123', 'Grenoble ⇾ Salers', 'unlisted', '2026-10-05T20:00:00Z', 'UC1' ], [ $details->id, $details->title, $details->privacy, $details->publishedAt, $details->channelId ] );
+		$this->assertSame( 'https://www.googleapis.com/youtube/v3/videos?part=snippet,status&id=abcDEF_-123', $this->requests[0]['url'] );
+	}
+
+	public function test_details_of_a_missing_video_are_an_error(): void {
+		$this->response = [ 'status' => 200, 'headers' => [], 'body' => '{"items":[]}' ];
+
+		$this->expectException( VideoUpdateException::class );
+
+		$this->inspector()->details( 'abcDEF_-123' );
+	}
 }

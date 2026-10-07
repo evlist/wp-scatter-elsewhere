@@ -664,4 +664,45 @@ class UploadServiceTest extends TestCase {
 		$this->assertSame( 'job2', $jobs['v2']->id() );
 		$this->assertSame( [], $service->jobsForPost( 99 ) );
 	}
+
+	public function test_unlinking_removes_the_record_and_the_finished_job_stops_counting(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata() );
+		$service->process( 'job1', 600 );
+		$this->assertNotNull( $service->publicationFor( 7, 'v1' ) );
+
+		$this->assertTrue( $service->unlink( 7, 'v1' ) );
+
+		$this->assertNull( $service->publicationFor( 7, 'v1' ) );
+		$this->assertSame( [], $this->meta[7] );
+		$this->assertTrue( $service->job( 'job1' )->isUnlinked() );
+		$this->assertSame( UploadJob::STATUS_DONE, $service->job( 'job1' )->status() );
+		$this->assertSame( 'job2', $service->enqueue( $this->video(), 7, $this->metadata() )->id() );
+	}
+
+	public function test_unlinking_a_job_without_record_works_and_a_second_unlink_finds_nothing(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video(), 7, $this->metadata() );
+		$service->process( 'job1', 600 );
+		$this->meta = [];
+
+		$this->assertTrue( $service->unlink( 7, 'v1' ) );
+		$this->assertFalse( $service->unlink( 7, 'v1' ) );
+		$this->assertNull( $service->publicationFor( 7, 'v1' ) );
+	}
+
+	public function test_unlinking_does_not_touch_the_jobs_of_other_videos(): void {
+		$service = $this->service();
+		$service->enqueue( $this->video( 'v1' ), 7, $this->metadata() );
+		$service->process( 'job1', 600 );
+		$this->server = new FakeUploadServer( strlen( self::CONTENT ) );
+		$service      = $this->service();
+		$service->enqueue( $this->video( 'v2' ), 7, $this->metadata() );
+		$service->process( 'job2', 600 );
+
+		$service->unlink( 7, 'v1' );
+
+		$this->assertFalse( $service->job( 'job2' )->isUnlinked() );
+		$this->assertNotNull( $service->publicationFor( 7, 'v2' ) );
+	}
 }

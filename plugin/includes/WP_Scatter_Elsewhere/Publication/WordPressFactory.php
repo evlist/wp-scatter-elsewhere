@@ -18,6 +18,54 @@ final class WordPressFactory {
 		);
 	}
 
+	/**
+	 * Links of the blog: the publications recorded on the posts and the finished uploads that predate them.
+	 */
+	public static function linkIndex(): LinkIndex {
+		return new LinkIndex(
+			static function (): iterable {
+				$store = self::store();
+				$ids   = get_posts(
+					[
+						'post_type'      => 'any',
+						'post_status'    => 'any',
+						'posts_per_page' => -1,
+						'fields'         => 'ids',
+						'meta_key'       => PublicationStore::META_KEY, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+						'no_found_rows'  => true,
+					]
+				);
+
+				foreach ( $ids as $postId ) {
+					foreach ( $store->forPost( (int) $postId ) as $publication ) {
+						yield [ 'post_id' => (int) $postId, 'video_id' => $publication->videoId, 'youtube_id' => $publication->youtubeId ];
+					}
+				}
+
+				foreach ( \WP_Scatter_Elsewhere\YouTube\WordPressFactory::uploadService()->jobs() as $job ) {
+					if ( 'done' === $job->status() && ! $job->isUnlinked() && null !== $job->youtubeId() ) {
+						yield [ 'post_id' => $job->postId(), 'video_id' => $job->videoId(), 'youtube_id' => $job->youtubeId() ];
+					}
+				}
+			}
+		);
+	}
+
+	public static function linkService(): LinkService {
+		$youtube = \WP_Scatter_Elsewhere\YouTube\WordPressFactory::class;
+		$uploads = $youtube::uploadService();
+		$index   = self::linkIndex();
+
+		return new LinkService(
+			$youtube::videoInspector(),
+			self::store(),
+			static fn( int $postId, string $videoId ): bool => $uploads->unlink( $postId, $videoId ),
+			static fn( string $youtubeId ): ?array => $index->find( $youtubeId ),
+			static fn(): string => $youtube::settings()->channelId(),
+			static fn(): int => time()
+		);
+	}
+
 	public static function refresher(): PublicationRefresher {
 		return new PublicationRefresher( \WP_Scatter_Elsewhere\YouTube\WordPressFactory::videoInspector(), self::store() );
 	}

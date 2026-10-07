@@ -10,6 +10,7 @@ use WP_Scatter_Elsewhere\Detection\DetectionException;
 use WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
 use InvalidArgumentException;
+use WP_Scatter_Elsewhere\Publication\LinkException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Thumbnails\WordPressFactory as ThumbnailFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
@@ -131,6 +132,9 @@ final class Command {
 	/**
 	 * Links a video that is already on YouTube to a video of a post, without uploading anything.
 	 *
+	 * YouTube is asked for the video, which must belong to the connected channel, and the link is refused
+	 * when the video is already linked to another video of the blog (use --force to move it).
+	 *
 	 * ## OPTIONS
 	 *
 	 * <post-id>
@@ -139,22 +143,33 @@ final class Command {
 	 * <video-id>
 	 * : The ID given by the "videos" command.
 	 *
-	 * <youtube-id>
-	 * : The YouTube video ID (the "v" parameter of its address).
+	 * <youtube-address>
+	 * : The address of the YouTube video (watch, youtu.be, shorts, embed or live) or its ID.
+	 *
+	 * [--force]
+	 * : Ask YouTube nothing and move the link if the video is linked elsewhere.
 	 *
 	 * [--privacy=<privacy>]
-	 * : private, unlisted or public, when known. A video of unknown privacy is treated as shareable.
+	 * : With --force only: private, unlisted or public, when known.
 	 *
 	 * @param string[]              $args
 	 * @param array<string, mixed> $assoc
 	 */
 	public function link( array $args, array $assoc ): void {
-		$postId = (int) $args[0];
-		$video  = $this->selectVideo( $this->detect( $postId ), $args[1] );
+		$postId  = (int) $args[0];
+		$video   = $this->selectVideo( $this->detect( $postId ), $args[1] );
+		$service = PublicationFactory::linkService();
 
 		try {
-			$publication = WordPressFactory::uploadService()->link( $postId, $video->id, $args[2], isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null );
-		} catch ( UploadException $e ) {
+			$publication = ! empty( $assoc['force'] )
+				? $service->linkUnchecked( $postId, $video->id, $args[2], isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null )
+				: $service->link( $postId, $video->id, $args[2] );
+		} catch ( LinkException $e ) {
+			if ( 'already_linked' === $e->errorCode() && null !== $e->linkedTo() ) {
+				/* translators: 1: message, 2: post ID, 3: video ID. */
+				WP_CLI::error( sprintf( __( '%1$s (post %2$d, video %3$s). Use --force to move the link.', 'wp-scatter-elsewhere' ), $e->getMessage(), $e->linkedTo()['post_id'], $e->linkedTo()['video_id'] ) );
+			}
+
 			WP_CLI::error( $e->getMessage() );
 		}
 
@@ -162,67 +177,7 @@ final class Command {
 	}
 
 	/**
-	 * Sends the subtitle tracks of a video of a post to the YouTube video recorded for it.
-	 *
-	 * Tracks are added, or replaced when YouTube already has a standard track for the language.
-	 *
-	 * ## OPTIONS
-	 *
-	 * <post-id>
-	 * : The ID of a published post.
-	 *
-	 * [<video-id>]
-	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
-	 *
-	 * [--remove-auto]
-	 * : Delete the automatic captions of the languages sent. Defaults to the setting.
-	 *
-	 * @param string[]              $args
-	 * @param array<string, mixed> $assoc
-	 */
-	public function subtitles( array $args, array $assoc = [] ): void {
-		$postId      = (int) $args[0];
-		$publication = $this->selectPublication( $postId, $args[1] ?? null );
-		$video       = $this->selectVideo( $this->detect( $postId ), $publication->videoId );
-
-		$tracks = [];
-		foreach ( $video->subtitles as $track ) {
-			if ( $track->isUsable() ) {
-				$tracks[] = [ 'language' => (string) $track->language, 'path' => $track->file->path, 'name' => (string) $track->label ];
-			} else {
-				WP_CLI::warning( sprintf( /* translators: 1: subtitle address, 2: reason. */ __( 'Skipped %1$s: %2$s', 'wp-scatter-elsewhere' ), $track->url, (string) $track->reason ) );
-			}
-		}
-
-		if ( [] === $tracks ) {
-			WP_CLI::error( __( 'No usable subtitle track in the page of this post.', 'wp-scatter-elsewhere' ) );
-		}
-
-		try {
-			$result = WordPressFactory::subtitleService()->sync( $publication->youtubeId, $tracks, isset( $assoc['remove-auto'] ) ? true : null );
-		} catch ( YouTubeConnectionException $e ) {
-			WP_CLI::error( $e->getMessage() );
-		}
-
-		foreach ( $result->actions as $language => $action ) {
-			WP_CLI::log( sprintf( /* translators: 1: language code, 2: "inserted" or "replaced". */ __( '%1$s: %2$s', 'wp-scatter-elsewhere' ), $language, $action ) );
-		}
-
-		foreach ( $result->removed as $language => $count ) {
-			WP_CLI::log( sprintf( /* translators: 1: language code, 2: number of tracks. */ __( '%1$s: %2$d automatic track(s) deleted', 'wp-scatter-elsewhere' ), $language, $count ) );
-		}
-
-		if ( $result->hasErrors() ) {
-			WP_CLI::error( $result->errorSummary() );
-		}
-
-		WP_CLI::success( __( 'Subtitles sent.', 'wp-scatter-elsewhere' ) );
-	}
-
-	/**
-	 * Sets the featured image of a post as the thumbnail of the YouTube video recorded for it.
-	 *
-	 * The image is cropped to 16:9, scaled down to 1280 x 720 and compressed under 2 MB.
+	 * Removes the link between a video of a post and its YouTube video. Nothing is changed on YouTube.
 	 *
 	 * ## OPTIONS
 	 *
@@ -234,220 +189,15 @@ final class Command {
 	 *
 	 * @param string[] $args
 	 */
-	public function thumbnail( array $args ): void {
-		$postId      = (int) $args[0];
-		$post        = get_post( $postId );
-		if ( ! $post instanceof \WP_Post ) {
-			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
+	public function unlink( array $args ): void {
+		$postId  = (int) $args[0];
+		$videoId = $args[1] ?? $this->selectPublication( $postId, null )->videoId;
+
+		if ( ! PublicationFactory::linkService()->unlink( $postId, $videoId ) ) {
+			WP_CLI::error( __( 'No YouTube video is linked to this video.', 'wp-scatter-elsewhere' ) );
 		}
 
-		$publication = $this->selectPublication( $postId, $args[1] ?? null );
-		$image       = MetadataFactory::postData( $post )->featuredImagePath;
-
-		if ( null === $image ) {
-			WP_CLI::error( __( 'This post has no featured image, or its file cannot be read.', 'wp-scatter-elsewhere' ) );
-		}
-
-		try {
-			ThumbnailFactory::service()->send( $publication->youtubeId, $image );
-		} catch ( YouTubeConnectionException $e ) {
-			WP_CLI::error( $e->getMessage() );
-		}
-
-		WP_CLI::success( sprintf( /* translators: %s: YouTube address. */ __( 'Thumbnail set for %s', 'wp-scatter-elsewhere' ), $publication->url() ) );
-	}
-
-	/**
-	 * Lists the caption tracks that YouTube holds for the video recorded for a post, with their state.
-	 *
-	 * Shows whether a track is serving, still syncing or failed (and why), whether it is a draft, and
-	 * tells the tracks of the creator ("standard") from the automatic ones ("asr").
-	 *
-	 * ## OPTIONS
-	 *
-	 * <post-id>
-	 * : The ID of a post.
-	 *
-	 * [<video-id>]
-	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
-	 *
-	 * @param string[] $args
-	 */
-	public function captions( array $args ): void {
-		$publication = $this->selectPublication( (int) $args[0], $args[1] ?? null );
-
-		try {
-			$tracks = WordPressFactory::captionClient()->tracks( $publication->youtubeId );
-		} catch ( YouTubeConnectionException $e ) {
-			WP_CLI::error( $e->getMessage() );
-		}
-
-		if ( [] === $tracks ) {
-			WP_CLI::warning( __( 'YouTube holds no caption track for this video.', 'wp-scatter-elsewhere' ) );
-			return;
-		}
-
-		$rows = array_map(
-			static fn( array $track ): array => [
-				'id'       => $track['id'],
-				'language' => $track['language'],
-				'name'     => $track['name'],
-				'kind'     => $track['kind'],
-				'status'   => $track['status'],
-				'failure'  => $track['failure'],
-				'draft'    => $track['draft'] ? 'yes' : 'no',
-			],
-			$tracks
-		);
-
-		\WP_CLI\Utils\format_items( 'table', $rows, [ 'id', 'language', 'name', 'kind', 'status', 'failure', 'draft' ] );
-	}
-
-	/**
-	 * Lists the playlists of the channel.
-	 */
-	public function playlists(): void {
-		try {
-			$playlists = WordPressFactory::playlistClient()->playlists();
-		} catch ( YouTubeConnectionException $e ) {
-			WP_CLI::error( $e->getMessage() );
-		}
-
-		if ( [] === $playlists ) {
-			WP_CLI::warning( __( 'The channel has no playlist.', 'wp-scatter-elsewhere' ) );
-			return;
-		}
-
-		$rows = [];
-		foreach ( $playlists as $id => $title ) {
-			$rows[] = [ 'id' => $id, 'title' => $title ];
-		}
-
-		\WP_CLI\Utils\format_items( 'table', $rows, [ 'id', 'title' ] );
-	}
-
-	/**
-	 * Puts the YouTube video recorded for a post in the playlists given by the rules of its terms.
-	 *
-	 * Playlists that already contain the video are skipped.
-	 *
-	 * ## OPTIONS
-	 *
-	 * <post-id>
-	 * : The ID of a post.
-	 *
-	 * [<video-id>]
-	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
-	 *
-	 * @subcommand playlists-add
-	 *
-	 * @param string[] $args
-	 */
-	public function playlists_add( array $args ): void {
-		$postId = (int) $args[0];
-		$post   = get_post( $postId );
-		if ( ! $post instanceof \WP_Post ) {
-			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
-		}
-
-		$publication = $this->selectPublication( $postId, $args[1] ?? null );
-		$playlists   = MetadataFactory::videoMetadataBuilder()->build( MetadataFactory::postData( $post ) )->playlists;
-
-		if ( [] === $playlists ) {
-			WP_CLI::error( __( 'No rule gives a playlist to the terms of this post.', 'wp-scatter-elsewhere' ) );
-		}
-
-		$result = WordPressFactory::playlistService()->addTo( $publication->youtubeId, $playlists );
-
-		foreach ( $result->added as $playlistId ) {
-			WP_CLI::log( sprintf( /* translators: %s: playlist ID. */ __( '%s: added', 'wp-scatter-elsewhere' ), $playlistId ) );
-		}
-		foreach ( $result->skipped as $playlistId ) {
-			WP_CLI::log( sprintf( /* translators: %s: playlist ID. */ __( '%s: already in the playlist', 'wp-scatter-elsewhere' ), $playlistId ) );
-		}
-
-		if ( $result->hasErrors() ) {
-			WP_CLI::error( $result->errorSummary() );
-		}
-
-		WP_CLI::success( __( 'Playlists done.', 'wp-scatter-elsewhere' ) );
-	}
-
-	/**
-	 * Applies properties of a post to the YouTube video recorded for it.
-	 *
-	 * ## OPTIONS
-	 *
-	 * <post-id>
-	 * : The ID of a post.
-	 *
-	 * [<video-id>]
-	 * : The ID given by the "videos" command. Optional when a single video is recorded for the post.
-	 *
-	 * [--fields=<fields>]
-	 * : Comma-separated list among language, license, recording_date, keywords, title and description. The keywords of the rules are added to the existing ones.
-	 * ---
-	 * default: language,license,recording_date
-	 * ---
-	 *
-	 * @subcommand apply-metadata
-	 *
-	 * @param string[]              $args
-	 * @param array<string, mixed> $assoc
-	 */
-	public function apply_metadata( array $args, array $assoc ): void {
-		$postId = (int) $args[0];
-		$post   = get_post( $postId );
-		if ( ! $post instanceof \WP_Post ) {
-			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
-		}
-
-		$publication = $this->selectPublication( $postId, $args[1] ?? null );
-		$metadata    = MetadataFactory::videoMetadataBuilder()->build( MetadataFactory::postData( $post ) );
-
-		$available = [
-			'title'          => $metadata->title,
-			'description'    => $metadata->description,
-			'language'       => $metadata->language,
-			'license'        => $metadata->license,
-			'recording_date' => $metadata->recordingDate,
-			'keywords'       => [] === $metadata->keywords ? null : $metadata->keywords,
-		];
-
-		$changes = [];
-		foreach ( array_filter( array_map( 'trim', explode( ',', (string) ( $assoc['fields'] ?? 'language,license,recording_date' ) ) ) ) as $field ) {
-			if ( ! in_array( $field, VideoUpdater::FIELDS, true ) ) {
-				WP_CLI::error( sprintf( /* translators: %s: field name. */ __( 'Unknown field: %s', 'wp-scatter-elsewhere' ), $field ) );
-			}
-			if ( null === $available[ $field ] || '' === $available[ $field ] || [] === $available[ $field ] ) {
-				WP_CLI::warning( sprintf( /* translators: %s: field name. */ __( 'No value for %s, it is left unchanged.', 'wp-scatter-elsewhere' ), $field ) );
-				continue;
-			}
-			$changes[ $field ] = $available[ $field ];
-		}
-
-		if ( [] === $changes ) {
-			WP_CLI::error( __( 'Nothing to update.', 'wp-scatter-elsewhere' ) );
-		}
-
-		try {
-			$dropped = WordPressFactory::videoUpdater()->update( $publication->youtubeId, $changes );
-		} catch ( InvalidArgumentException | YouTubeConnectionException $e ) {
-			WP_CLI::error( $e->getMessage() );
-		}
-
-		if ( [] !== $dropped ) {
-			WP_CLI::warning( sprintf( /* translators: %s: comma-separated keywords. */ __( 'Keywords left out, they do not fit the limit of YouTube: %s', 'wp-scatter-elsewhere' ), implode( ', ', $dropped ) ) );
-		}
-
-		WP_CLI::success(
-			sprintf(
-				/* translators: 1: YouTube address, 2: comma-separated field names. */
-				__( 'Updated %1$s (%2$s).', 'wp-scatter-elsewhere' ),
-				$publication->url(),
-				implode( ', ', array_keys( $changes ) )
-			)
-		);
+		WP_CLI::success( __( 'Unlinked. Nothing was changed on YouTube.', 'wp-scatter-elsewhere' ) );
 	}
 
 	/**
