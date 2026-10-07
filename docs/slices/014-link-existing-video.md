@@ -77,7 +77,7 @@ that the job no longer counts, so that unlinking really unlinks.
 
 ### 6. WP-CLI
 
-- `wp scatter-elsewhere link <post-id> <video-id> <youtube-address> [--force] [--privacy=<privacy>]`
+- `wp scatter-elsewhere link <post-id> <video-id> <youtube-url-or-id> [--force] [--privacy=<privacy>]`
   accepts the same addresses and does the same checks; a video linked elsewhere is refused
   with the post it is linked to. `--force` asks YouTube nothing, records the link as given
   (with `--privacy` when known) and moves the link if it was elsewhere; it is meant for the

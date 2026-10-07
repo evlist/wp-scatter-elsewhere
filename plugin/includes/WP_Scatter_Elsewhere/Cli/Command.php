@@ -143,14 +143,22 @@ final class Command {
 	 * <video-id>
 	 * : The ID given by the "videos" command.
 	 *
-	 * <youtube-address>
-	 * : The address of the YouTube video (watch, youtu.be, shorts, embed or live) or its ID.
+	 * <youtube-url-or-id>
+	 * : The web address (URL) of the video on YouTube, as copied from the browser or from the
+	 * "Share" button (youtube.com/watch?v=..., youtu.be/..., youtube.com/shorts/..., embed or live),
+	 * or the 11-character video ID alone. Quote the address, because of the "&" it may contain.
 	 *
 	 * [--force]
 	 * : Ask YouTube nothing and move the link if the video is linked elsewhere.
 	 *
 	 * [--privacy=<privacy>]
 	 * : With --force only: private, unlisted or public, when known.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     # Find the ID of the video of the post on the blog, then link it to its YouTube video.
+	 *     wp scatter-elsewhere videos 57492
+	 *     wp scatter-elsewhere link 57492 v41e825b7441a "https://www.youtube.com/watch?v=9_BlGDkmk7U"
 	 *
 	 * @param string[]              $args
 	 * @param array<string, mixed> $assoc

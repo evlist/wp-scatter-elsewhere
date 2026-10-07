@@ -50,7 +50,7 @@ ID), **Look up** shows its title, privacy and date, and **Link this video** reco
 must belong to the connected channel; if it is already linked to another post, the panel says
 which one and asks before moving the link. **Unlink** removes a link (YouTube is never changed).
 The same is available from WP-CLI:
-`wp scatter-elsewhere link <post-id> <video-id> <youtube-address>` and
+`wp scatter-elsewhere link <post-id> <video-id> <youtube-url-or-id>` and
 `wp scatter-elsewhere unlink <post-id> [<video-id>]`. Once linked, the old video can be completed
 with `subtitles`, `thumbnail`, `playlists-add` and `apply-metadata`.
 
