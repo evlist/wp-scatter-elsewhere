@@ -244,6 +244,53 @@ final class Command {
 	}
 
 	/**
+	 * Proposes the videos of the channel that probably belong to a post, with the reason.
+	 *
+	 * Nothing is linked: use "link" with the video you choose.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <post-id>
+	 * : The ID of a post.
+	 *
+	 * [--refresh]
+	 * : Read the channel again instead of using the kept list.
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function suggest( array $args, array $assoc ): void {
+		$facts = \WP_Scatter_Elsewhere\Matching\WordPressFactory::postFacts( (int) $args[0] );
+		if ( null === $facts ) {
+			WP_CLI::error( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
+		}
+
+		try {
+			$found = \WP_Scatter_Elsewhere\Matching\WordPressFactory::suggester()->suggest( $facts, ! empty( $assoc['refresh'] ) );
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		if ( [] === $found ) {
+			WP_CLI::warning( __( 'No video of the channel seems to match this post.', 'wp-scatter-elsewhere' ) );
+			return;
+		}
+
+		$rows = [];
+		foreach ( $found as $suggestion ) {
+			$rows[] = [
+				'youtube_id' => $suggestion->video->id,
+				'confidence' => $suggestion->confidence,
+				'privacy'    => $suggestion->video->privacy,
+				'title'      => $suggestion->video->title,
+				'reason'     => implode( ', ', array_map( [ \WP_Scatter_Elsewhere\Matching\WordPressFactory::class, 'reasonLabel' ], $suggestion->reasons ) ),
+			];
+		}
+
+		\WP_CLI\Utils\format_items( 'table', $rows, [ 'youtube_id', 'confidence', 'privacy', 'title', 'reason' ] );
+	}
+
+	/**
 	 * Removes the link between a video of a post and its YouTube video. Nothing is changed on YouTube.
 	 *
 	 * ## OPTIONS

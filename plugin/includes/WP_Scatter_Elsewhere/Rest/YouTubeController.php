@@ -95,6 +95,16 @@ final class YouTubeController {
 
 		register_rest_route(
 			self::NAMESPACE,
+			'/post/(?P<id>\d+)/youtube/suggestions',
+			[
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => [ $this, 'suggestions' ],
+				'permission_callback' => [ $this, 'canUsePostPanel' ],
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			'/youtube/channel-videos',
 			[
 				'methods'             => WP_REST_Server::READABLE,
@@ -351,6 +361,33 @@ final class YouTubeController {
 				'videos' => ( new PostYouTubeState() )->statuses( $this->publications( $service, $job->postId(), [ $job->videoId() ] ), [ $job->videoId() => $job ] ),
 			]
 		);
+	}
+
+	/**
+	 * The videos of the channel that probably belong to the post.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function suggestions( WP_REST_Request $request ) {
+		$facts = \WP_Scatter_Elsewhere\Matching\WordPressFactory::postFacts( (int) $request['id'] );
+		if ( null === $facts ) {
+			return new WP_Error( 'wp_scatter_elsewhere_no_post', __( 'This post does not exist.', 'wp-scatter-elsewhere' ), [ 'status' => 404 ] );
+		}
+
+		try {
+			$found = \WP_Scatter_Elsewhere\Matching\WordPressFactory::suggester()->suggest( $facts, (bool) $request->get_param( 'refresh' ) );
+		} catch ( \WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_suggestions', $e->getMessage(), [ 'status' => 502 ] );
+		}
+
+		$suggestions = [];
+		foreach ( $found as $suggestion ) {
+			$data            = \WP_Scatter_Elsewhere\Matching\WordPressFactory::describe( $suggestion );
+			$data['reasons'] = array_map( [ \WP_Scatter_Elsewhere\Matching\WordPressFactory::class, 'reasonLabel' ], $data['reasons'] );
+			$suggestions[]   = $data;
+		}
+
+		return new WP_REST_Response( [ 'suggestions' => $suggestions ] );
 	}
 
 	/**

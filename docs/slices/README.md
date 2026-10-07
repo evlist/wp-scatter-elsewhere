@@ -25,7 +25,7 @@ Linking posts that were published before the plugin to the videos that are alrea
 
 14. [Link a video that is already on YouTube](014-link-existing-video.md): by address or id from the editor panel, with checks, confirmation and unlinking.
 15. [Browse the videos of the channel](015-browse-channel-videos.md): a cached, searchable list of the channel to pick from (implemented).
-16. [Suggest the video of a post](016-suggest-video-for-post.md): matching by the permalink left in the description by the old script, by title and by date.
+16. [Suggest the video of a post](016-suggest-video-for-post.md): matching by the permalink left in the description by the old script, by title and by date. (implemented)
 17. [Link all the old posts](017-link-existing-in-bulk.md): a WP-CLI command that reports first and links the confident matches on request.
 
 ## Ideas to schedule

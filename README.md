@@ -58,6 +58,10 @@ Instead of pasting an address, **Choose from my channel** lists the videos of th
 privacy, date, and the post each one is already linked to); type some words of the title to narrow
 the list, then **Choose** goes through the usual confirmation. The list is kept for an hour
 (**Refresh from YouTube** reads it again; reading costs about 1 quota unit per 50 videos plus 2).
+**Suggest videos** proposes up to three videos of the channel for the post, with the reason: the
+address of the post found in the description, the same title, or a similar title with a close
+date (a video already linked elsewhere is never proposed). Nothing is linked before you confirm.
+`wp scatter-elsewhere suggest <post-id>` prints the same candidates.
 From WP-CLI: `wp scatter-elsewhere channel-videos [--search=<words>] [--unlinked] [--limit=<n>] [--refresh]`.
 
 ## Uploading a video

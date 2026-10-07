@@ -94,3 +94,11 @@ confidence.
 
 - Posts published before the old script was used may have none of these traces: for them
   the manual and the list-based links remain.
+
+## Status
+
+- Status: implemented. The normal form of titles is the existing `Text\Folding`, and the videos are
+  the `YouTube\CatalogVideo` of slice 015, so `Matching/` holds `PostFacts`, `Suggestion`,
+  `VideoMatcher` (pure) and `VideoSuggester` (reads the unlinked videos of the catalogue). The
+  tolerance is 3 days and the title similarity 80 %. The panel reads the channel only when the
+  author clicks **Suggest videos**.

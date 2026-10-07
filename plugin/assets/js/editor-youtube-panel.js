@@ -317,6 +317,7 @@
 		const [ choosing, setChoosing ] = useState( false );
 		const [ search, setSearch ] = useState( '' );
 		const [ channel, setChannel ] = useState( null );
+		const [ suggestions, setSuggestions ] = useState( null );
 
 		const close = function () {
 			setOpen( false );
@@ -326,6 +327,18 @@
 			setChoosing( false );
 			setSearch( '' );
 			setChannel( null );
+			setSuggestions( null );
+		};
+
+		// The videos of the channel that probably belong to this post (one read of the channel).
+		const suggest = function () {
+			setWorking( true );
+			setFailure( '' );
+
+			apiFetch( { path: NAMESPACE + '/post/' + postId + '/youtube/suggestions' } )
+				.then( ( response ) => setSuggestions( response.suggestions ) )
+				.catch( ( error ) => setFailure( errorMessage( error ) ) )
+				.finally( () => setWorking( false ) );
 		};
 
 		// The videos of the channel, filtered by the words typed; "refresh" reads the channel again.
@@ -419,6 +432,31 @@
 		} else {
 			children.push(
 				el( Button, { key: 'lookup', variant: 'secondary', isBusy: working, disabled: working || '' === address.trim(), onClick: () => lookUp( address ) }, __( 'Look up', 'wp-scatter-elsewhere' ) )
+			);
+		}
+
+		if ( ! preview ) {
+			children.push( ' ', el( Button, { key: 'suggest', variant: 'tertiary', disabled: working, onClick: suggest }, __( 'Suggest videos', 'wp-scatter-elsewhere' ) ) );
+		}
+
+		if ( suggestions && ! preview ) {
+			children.push(
+				0 === suggestions.length
+					? el( 'p', { key: 'nosuggestion' }, __( 'No video of the channel seems to match this post.', 'wp-scatter-elsewhere' ) )
+					: el(
+						'ul',
+						{ key: 'suggestions', style: { listStyle: 'none', margin: '8px 0 0', padding: 0 } },
+						suggestions.map( ( item ) =>
+							el(
+								'li',
+								{ key: item.youtube_id, style: { margin: '6px 0' } },
+								el( 'strong', null, item.title ),
+								el( 'div', { style: { color: '#757575' } }, [ privacyLabel( item.privacy ), formatDate( item.published_at ) ].filter( Boolean ).join( ', ' ) ),
+								el( 'div', { style: { color: '#757575' } }, item.reasons.join( ', ' ) ),
+								el( Button, { variant: 'link', disabled: working, onClick: () => { setAddress( item.youtube_id ); setSuggestions( null ); lookUp( item.youtube_id ); } }, __( 'Choose', 'wp-scatter-elsewhere' ) )
+							)
+						)
+					)
 			);
 		}
 
