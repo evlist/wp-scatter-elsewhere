@@ -77,20 +77,28 @@ that the job no longer counts, so that unlinking really unlinks.
 
 ### 6. WP-CLI
 
-- `wp scatter-elsewhere link <post-id> <video-id> <youtube-id-or-url> [--privacy=<privacy>] [--force]`
-  accepts the same addresses and does the same checks; `--force` skips the check that
-  the video is on the connected channel and the "already linked" confirmation.
+- `wp scatter-elsewhere link <post-id> <video-id> <youtube-address> [--force] [--privacy=<privacy>]`
+  accepts the same addresses and does the same checks; a video linked elsewhere is refused
+  with the post it is linked to. `--force` asks YouTube nothing, records the link as given
+  (with `--privacy` when known) and moves the link if it was elsewhere; it is meant for the
+  cases where YouTube cannot be read or the author knows better.
 - `wp scatter-elsewhere unlink <post-id> [<video-id>]`.
 
 ### 7. REST routes
 
 `POST /post/<id>/youtube/link-preview` (address, `video_id`) returns the title, privacy,
-upload date and the post it is already linked to, if any. `POST /post/<id>/youtube/link`
-records it, `POST /post/<id>/youtube/unlink` removes it.
+upload date, whether the channel could be checked, and the post it is already linked to,
+if any (with its title and edit address). `POST /post/<id>/youtube/link` (address,
+`video_id`, `confirm_move`) records it; it answers 409 when the video is linked elsewhere
+and the move was not confirmed. `POST /post/<id>/youtube/unlink` (`video_id`) removes the
+link and answers 404 when there was none. Linking requires the post to be published and
+the video to be one of those found in its page; unlinking does not read the page.
 
 ### 8. Code structure
 
 - `YouTube/YouTubeAddress.php`: extracts the id from an address, pure.
+- `Publication/LinkIndex.php`: tells where a YouTube video is linked, from the records of
+  the posts and the finished uploads that predate them.
 - `YouTube/VideoInspector.php`: gains a method that returns the title, privacy, upload
   date and channel of a video (it already reads the privacy).
 - `Publication/LinkService.php`: preview, link, unlink and the reverse lookup, with
@@ -120,6 +128,14 @@ records it, `POST /post/<id>/youtube/unlink` removes it.
 7. Unit tests cover the address parsing, the checks and the link and unlink logic.
 
 ## Notes
+
+- Status: implemented. The address parsing, the checks, the link, the move, the unlink
+  (including the finished upload jobs, which are flagged so that they stop counting), the
+  index and the inspector are unit-tested (350 PHP tests in total). The panel (look up,
+  confirmation, move, unlink, error cases) was exercised with the jsdom harness, and the
+  REST routes with stubs of the WordPress functions, including the conflict flow. The
+  WP-CLI commands `link` and `unlink` have only been syntax-checked. Nothing has been run
+  against a real WordPress or YouTube yet.
 
 - The reverse lookup scans the posts that have the publication meta: fine for a blog
   with thousands of posts, to be reconsidered beyond that.

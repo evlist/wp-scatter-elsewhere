@@ -42,6 +42,18 @@ when an upload failed. It
 needs the `manage_options` capability (filter `wp_scatter_elsewhere_capability`). Uploads
 run in the background with WP-Cron, see below.
 
+### Videos that are already on YouTube
+
+For posts published before the plugin, the panel offers **Link a video that is already on
+YouTube** on every video that has no YouTube video yet: paste the address of the video (or its
+ID), **Look up** shows its title, privacy and date, and **Link this video** records it. The video
+must belong to the connected channel; if it is already linked to another post, the panel says
+which one and asks before moving the link. **Unlink** removes a link (YouTube is never changed).
+The same is available from WP-CLI:
+`wp scatter-elsewhere link <post-id> <video-id> <youtube-address>` and
+`wp scatter-elsewhere unlink <post-id> [<video-id>]`. Once linked, the old video can be completed
+with `subtitles`, `thumbnail`, `playlists-add` and `apply-metadata`.
+
 ## Uploading a video
 
 The first entry point is WP-CLI (an editor interface will come later). The post
