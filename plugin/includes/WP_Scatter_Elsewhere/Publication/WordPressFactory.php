@@ -51,6 +51,24 @@ final class WordPressFactory {
 		);
 	}
 
+	/**
+	 * The videos of the channel, kept in a transient for an hour.
+	 */
+	public static function channelCatalog(): ChannelCatalog {
+		$key    = 'wp_scatter_elsewhere_channel_videos';
+		$reader = \WP_Scatter_Elsewhere\YouTube\WordPressFactory::channelVideoReader();
+
+		return new ChannelCatalog(
+			static fn( int $limit ): array => $reader->read( $limit ),
+			static fn(): mixed => get_transient( $key ),
+			static function ( array $value, int $ttl ) use ( $key ): void {
+				set_transient( $key, $value, $ttl );
+			},
+			static fn(): int => time(),
+			self::linkIndex()
+		);
+	}
+
 	public static function linkService(): LinkService {
 		$youtube = \WP_Scatter_Elsewhere\YouTube\WordPressFactory::class;
 		$uploads = $youtube::uploadService();

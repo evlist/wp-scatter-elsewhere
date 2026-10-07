@@ -95,6 +95,16 @@ final class YouTubeController {
 
 		register_rest_route(
 			self::NAMESPACE,
+			'/youtube/channel-videos',
+			[
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => [ $this, 'channelVideos' ],
+				'permission_callback' => static fn(): bool => current_user_can( self::capability() ),
+			]
+		);
+
+		register_rest_route(
+			self::NAMESPACE,
 			'/job/(?P<id>[A-Za-z0-9]+)/retry',
 			[
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -341,6 +351,39 @@ final class YouTubeController {
 				'videos' => ( new PostYouTubeState() )->statuses( $this->publications( $service, $job->postId(), [ $job->videoId() ] ), [ $job->videoId() => $job ] ),
 			]
 		);
+	}
+
+	/**
+	 * The videos of the connected channel, to choose the one to link.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function channelVideos( WP_REST_Request $request ) {
+		try {
+			$result = PublicationFactory::channelCatalog()->list(
+				(bool) $request->get_param( 'refresh' ),
+				(string) $request->get_param( 'search' ),
+				(bool) $request->get_param( 'unlinked' ),
+				min( 100, max( 1, (int) ( $request->get_param( 'max' ) ?: 30 ) ) )
+			);
+		} catch ( \WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_channel_videos', $e->getMessage(), [ 'status' => 502 ] );
+		}
+
+		$videos = [];
+		foreach ( $result['videos'] as $row ) {
+			$video    = $row['video'];
+			$videos[] = [
+				'youtube_id'   => $video->id,
+				'title'        => $video->title,
+				'published_at' => $video->publishedAt,
+				'privacy'      => $video->privacy,
+				'thumbnail'    => $video->thumbnail,
+				'linked_to'    => $this->describeLink( $row['linked_to'] ),
+			];
+		}
+
+		return new WP_REST_Response( [ 'videos' => $videos, 'total' => $result['total'], 'fetched_at' => $result['fetched_at'] ] );
 	}
 
 	/**

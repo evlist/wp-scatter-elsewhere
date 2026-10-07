@@ -314,24 +314,41 @@
 		const [ preview, setPreview ] = useState( null );
 		const [ working, setWorking ] = useState( false );
 		const [ failure, setFailure ] = useState( '' );
+		const [ choosing, setChoosing ] = useState( false );
+		const [ search, setSearch ] = useState( '' );
+		const [ channel, setChannel ] = useState( null );
 
 		const close = function () {
 			setOpen( false );
 			setAddress( '' );
 			setPreview( null );
 			setFailure( '' );
+			setChoosing( false );
+			setSearch( '' );
+			setChannel( null );
+		};
+
+		// The videos of the channel, filtered by the words typed; "refresh" reads the channel again.
+		const browse = function ( refresh ) {
+			setWorking( true );
+			setFailure( '' );
+
+			apiFetch( { path: NAMESPACE + '/youtube/channel-videos?search=' + encodeURIComponent( search ) + ( refresh ? '&refresh=1' : '' ) } )
+				.then( ( response ) => setChannel( response ) )
+				.catch( ( error ) => setFailure( errorMessage( error ) ) )
+				.finally( () => setWorking( false ) );
 		};
 
 		if ( ! open ) {
 			return el( 'p', { style: { margin: '8px 0 0' } }, el( Button, { variant: 'link', onClick: () => setOpen( true ) }, __( 'Link a video that is already on YouTube', 'wp-scatter-elsewhere' ) ) );
 		}
 
-		const lookUp = function () {
+		const lookUp = function ( value ) {
 			setWorking( true );
 			setFailure( '' );
 			setPreview( null );
 
-			apiFetch( { path: NAMESPACE + '/post/' + postId + '/youtube/link-preview', method: 'POST', data: { video_id: videoId, address: address } } )
+			apiFetch( { path: NAMESPACE + '/post/' + postId + '/youtube/link-preview', method: 'POST', data: { video_id: videoId, address: value } } )
 				.then( ( response ) => setPreview( response.preview ) )
 				.catch( ( error ) => setFailure( errorMessage( error ) ) )
 				.finally( () => setWorking( false ) );
@@ -401,7 +418,49 @@
 			);
 		} else {
 			children.push(
-				el( Button, { key: 'lookup', variant: 'secondary', isBusy: working, disabled: working || '' === address.trim(), onClick: lookUp }, __( 'Look up', 'wp-scatter-elsewhere' ) )
+				el( Button, { key: 'lookup', variant: 'secondary', isBusy: working, disabled: working || '' === address.trim(), onClick: () => lookUp( address ) }, __( 'Look up', 'wp-scatter-elsewhere' ) )
+			);
+		}
+
+		if ( ! preview ) {
+			children.push( ' ', el( Button, { key: 'choose', variant: 'tertiary', disabled: working, onClick: () => { setChoosing( ! choosing ); setChannel( null ); } }, __( 'Choose from my channel', 'wp-scatter-elsewhere' ) ) );
+		}
+
+		if ( choosing && ! preview ) {
+			const rows = ( channel ? channel.videos : [] ).map( ( item ) =>
+				el(
+					'li',
+					{ key: item.youtube_id, style: { margin: '6px 0' } },
+					el( 'strong', null, item.title ),
+					el( 'div', { style: { color: '#757575' } }, [ privacyLabel( item.privacy ), formatDate( item.published_at ) ].filter( Boolean ).join( ', ' ) ),
+					item.linked_to
+						? el( 'div', { style: { color: '#757575' } }, sprintf(
+							/* translators: %s: title of a post. */
+							__( 'Already linked to "%s"', 'wp-scatter-elsewhere' ),
+							item.linked_to.title
+						) )
+						: null,
+					el( Button, { variant: 'link', disabled: working, onClick: () => { setAddress( item.youtube_id ); setChoosing( false ); lookUp( item.youtube_id ); } }, __( 'Choose', 'wp-scatter-elsewhere' ) )
+				)
+			);
+
+			children.push(
+				el(
+					'div',
+					{ key: 'channel', style: { marginTop: '8px' } },
+					el( TextControl, { label: __( 'Words of the title', 'wp-scatter-elsewhere' ), value: search, onChange: setSearch, __nextHasNoMarginBottom: true } ),
+					el( Button, { variant: 'secondary', isBusy: working, disabled: working, onClick: () => browse( false ) }, __( 'Search', 'wp-scatter-elsewhere' ) ),
+					' ',
+					el( Button, { variant: 'tertiary', disabled: working, onClick: () => browse( true ) }, __( 'Refresh from YouTube', 'wp-scatter-elsewhere' ) ),
+					channel && 0 === channel.videos.length ? el( 'p', null, __( 'No video found.', 'wp-scatter-elsewhere' ) ) : null,
+					channel && channel.videos.length ? el( 'ul', { style: { listStyle: 'none', margin: '8px 0 0', padding: 0 } }, rows ) : null,
+					channel && channel.total > channel.videos.length ? el( 'p', { style: { color: '#757575' } }, sprintf(
+						/* translators: 1: number shown, 2: number found. */
+						__( '%1$d of %2$d videos shown: type more words to narrow the list.', 'wp-scatter-elsewhere' ),
+						channel.videos.length,
+						channel.total
+					) ) : null
+				)
 			);
 		}
 

@@ -146,6 +146,10 @@ final class WordPressFactory {
 		return new VideoInspector( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
 	}
 
+	public static function channelVideoReader(): ChannelVideoReader {
+		return new ChannelVideoReader( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
+	}
+
 	public static function playlistClient(): PlaylistClient {
 		return new PlaylistClient( self::uploadHttp(), self::accessTokenProvider( self::settings() ) );
 	}

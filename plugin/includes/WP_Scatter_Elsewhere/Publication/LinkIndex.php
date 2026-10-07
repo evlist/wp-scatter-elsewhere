@@ -24,6 +24,20 @@ final class LinkIndex {
 	}
 
 	/**
+	 * Every YouTube video that is linked, with the video of the blog it is linked to.
+	 *
+	 * @return array<string, array{post_id: int, video_id: string}>
+	 */
+	public function map(): array {
+		$map = [];
+		foreach ( ( $this->records )() as $record ) {
+			$map[ $record['youtube_id'] ] ??= [ 'post_id' => $record['post_id'], 'video_id' => $record['video_id'] ];
+		}
+
+		return $map;
+	}
+
+	/**
 	 * @return array{post_id: int, video_id: string}|null
 	 */
 	public function find( string $youtubeId ): ?array {

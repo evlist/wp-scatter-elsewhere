@@ -88,3 +88,10 @@ lists the videos with their id, title, date, privacy and linked post.
 
 - To the best of our knowledge the uploads playlist of the owner includes the private
   and unlisted videos; this must be confirmed with the real channel.
+
+## Status
+
+- Status: implemented. `ChannelVideoReader` (uploads playlist, batches of 50, limit 500),
+  `ChannelCatalog` (one-hour transient, search ignoring case and accents, unlinked filter, linked
+  marks from `LinkIndex::map()`), REST `GET /youtube/channel-videos`, the "Choose from my channel"
+  list of the panel and the WP-CLI `channel-videos` command.

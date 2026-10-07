@@ -185,6 +185,65 @@ final class Command {
 	}
 
 	/**
+	 * Lists the videos of the connected YouTube channel, newest first, with the post they are linked to.
+	 *
+	 * The list is kept for an hour; reading it costs about 1 quota unit per 50 videos plus 2.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--search=<text>]
+	 * : Only the videos whose title contains all these words (case and accents ignored).
+	 *
+	 * [--unlinked]
+	 * : Leave out the videos that are already linked.
+	 *
+	 * [--limit=<n>]
+	 * : Maximum number of videos shown.
+	 * ---
+	 * default: 30
+	 * ---
+	 *
+	 * [--refresh]
+	 * : Read the channel again instead of using the kept list.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp scatter-elsewhere channel-videos --search="grenoble salers" --unlinked
+	 *
+	 * @subcommand channel-videos
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function channel_videos( array $args, array $assoc ): void {
+		try {
+			$result = PublicationFactory::channelCatalog()->list(
+				! empty( $assoc['refresh'] ),
+				(string) ( $assoc['search'] ?? '' ),
+				! empty( $assoc['unlinked'] ),
+				max( 1, (int) ( $assoc['limit'] ?? 30 ) )
+			);
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		$rows = [];
+		foreach ( $result['videos'] as $row ) {
+			$rows[] = [
+				'youtube_id' => $row['video']->id,
+				'date'       => substr( $row['video']->publishedAt, 0, 10 ),
+				'privacy'    => $row['video']->privacy,
+				'title'      => $row['video']->title,
+				'linked_to'  => null === $row['linked_to'] ? '' : $row['linked_to']['post_id'] . ' ' . $row['linked_to']['video_id'],
+			];
+		}
+
+		\WP_CLI\Utils\format_items( 'table', $rows, [ 'youtube_id', 'date', 'privacy', 'title', 'linked_to' ] );
+		/* translators: 1: number shown, 2: number found. */
+		WP_CLI::log( sprintf( __( '%1$d of %2$d videos shown.', 'wp-scatter-elsewhere' ), count( $rows ), $result['total'] ) );
+	}
+
+	/**
 	 * Removes the link between a video of a post and its YouTube video. Nothing is changed on YouTube.
 	 *
 	 * ## OPTIONS

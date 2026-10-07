@@ -54,6 +54,12 @@ The same is available from WP-CLI:
 `wp scatter-elsewhere unlink <post-id> [<video-id>]`. Once linked, the old video can be completed
 with `subtitles`, `thumbnail`, `playlists-add` and `apply-metadata`.
 
+Instead of pasting an address, **Choose from my channel** lists the videos of the channel (title,
+privacy, date, and the post each one is already linked to); type some words of the title to narrow
+the list, then **Choose** goes through the usual confirmation. The list is kept for an hour
+(**Refresh from YouTube** reads it again; reading costs about 1 quota unit per 50 videos plus 2).
+From WP-CLI: `wp scatter-elsewhere channel-videos [--search=<words>] [--unlinked] [--limit=<n>] [--refresh]`.
+
 ## Uploading a video
 
 The first entry point is WP-CLI (an editor interface will come later). The post
