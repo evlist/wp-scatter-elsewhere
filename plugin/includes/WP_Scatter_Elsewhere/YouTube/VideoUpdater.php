@@ -20,7 +20,10 @@ final class VideoUpdater {
 	public const VIDEOS_ENDPOINT = 'https://www.googleapis.com/youtube/v3/videos';
 
 	/** Properties that can be changed, and the part of the video they belong to. */
-	public const FIELDS = [ 'title', 'description', 'language', 'license', 'recording_date', 'keywords' ];
+	public const FIELDS = [ 'title', 'description', 'language', 'license', 'recording_date', 'keywords', 'keywords_remove', 'category', 'embeddable', 'public_stats', 'made_for_kids', 'privacy' ];
+
+	/** Fields whose value is a list ("keywords" are added to the existing ones, "keywords_remove" are taken out of them). */
+	private const LISTS = [ 'keywords', 'keywords_remove' ];
 
 	/** Writable properties kept when the video is sent back, per part. */
 	private const KEPT = [
@@ -46,8 +49,9 @@ final class VideoUpdater {
 	}
 
 	/**
-	 * @param array<string, string|string[]> $changes Values by field name, among self::FIELDS ("keywords" is a list that is added to
-	 *                                                the existing keywords). Fields not listed are kept.
+	 * @param array<string, string|bool|string[]> $changes Values by field name, among self::FIELDS ("keywords" is a list that is added to
+	 *                                                the existing keywords, "keywords_remove" a list taken out of them; the
+	 *                                                options are booleans). Fields not listed are kept.
 	 * @return string[] The new keywords that do not fit the limit of YouTube and were left out.
 	 * @throws InvalidArgumentException          When a field is unknown or has no value.
 	 * @throws VideoUpdateException              When the video cannot be read or updated.
@@ -57,8 +61,8 @@ final class VideoUpdater {
 	 */
 	public function update( string $youtubeId, array $changes ): array {
 		foreach ( $changes as $field => $value ) {
-			$empty = is_array( $value ) ? [] === $value : '' === (string) $value;
-			if ( ! in_array( $field, self::FIELDS, true ) || $empty || ( is_array( $value ) && 'keywords' !== $field ) ) {
+			$empty = is_array( $value ) ? [] === $value : ( ! is_bool( $value ) && '' === (string) $value );
+			if ( ! in_array( $field, self::FIELDS, true ) || $empty || ( is_array( $value ) !== in_array( $field, self::LISTS, true ) ) ) {
 				throw new InvalidArgumentException(
 					sprintf(
 						/* translators: %s: name of a video property. */
@@ -93,6 +97,16 @@ final class VideoUpdater {
 		}
 
 		return $dropped;
+	}
+
+	/**
+	 * The current video, as far as the properties of the updates are concerned.
+	 *
+	 * @return array<string, mixed>
+	 * @throws VideoUpdateException
+	 */
+	public function snapshot( string $youtubeId ): array {
+		return $this->read( $youtubeId, $this->tokens->getAccessToken() );
 	}
 
 	/**
@@ -147,9 +161,29 @@ final class VideoUpdater {
 			'language'       => [ 'snippet', 'defaultLanguage' ],
 			'license'        => [ 'status', 'license' ],
 			'recording_date' => [ 'recordingDetails', 'recordingDate' ],
+			'category'       => [ 'snippet', 'categoryId' ],
+			'embeddable'     => [ 'status', 'embeddable' ],
+			'public_stats'   => [ 'status', 'publicStatsViewable' ],
+			'made_for_kids'  => [ 'status', 'selfDeclaredMadeForKids' ],
+			'privacy'        => [ 'status', 'privacyStatus' ],
 		];
 
+		// The removals come first, so that a keyword can be taken out and added back with another spelling.
+		if ( isset( $changes['keywords_remove'] ) ) {
+			$gone                     = array_map( static fn( string $keyword ): string => mb_strtolower( $keyword, 'UTF-8' ), (array) $changes['keywords_remove'] );
+			$video['snippet']['tags'] = array_values(
+				array_filter(
+					(array) ( $video['snippet']['tags'] ?? [] ),
+					static fn( string $tag ): bool => ! in_array( mb_strtolower( $tag, 'UTF-8' ), $gone, true )
+				)
+			);
+		}
+
 		foreach ( $changes as $field => $value ) {
+			if ( 'keywords_remove' === $field ) {
+				continue;
+			}
+
 			if ( 'keywords' === $field ) {
 				$merged                   = ( new KeywordNormalizer() )->add( (array) ( $video['snippet']['tags'] ?? [] ), (array) $value );
 				$video['snippet']['tags'] = $merged['kept'];

@@ -202,7 +202,7 @@ class VideoUpdaterTest extends TestCase {
 	}
 
 	public function test_unknown_fields_and_empty_values_are_refused_without_any_request(): void {
-		foreach ( [ [ 'privacy' => 'public' ], [ 'language' => '' ] ] as $changes ) {
+		foreach ( [ [ 'views' => '10' ], [ 'language' => '' ], [ 'keywords' => 'one' ], [ 'category' => [ '22' ] ] ] as $changes ) {
 			try {
 				$this->updater()->update( 'abcDEF_-123', $changes );
 				$this->fail( 'Expected an InvalidArgumentException.' );
@@ -254,5 +254,33 @@ class VideoUpdaterTest extends TestCase {
 				$this->assertSame( [], $this->requests );
 			}
 		}
+	}
+
+	public function test_updates_the_category_the_options_and_the_privacy(): void {
+		$this->responses = [ self::video(), [ 'status' => 200, 'headers' => [], 'body' => '{}' ] ];
+
+		$this->updater()->update( 'abcDEF_-123', [ 'category' => '27', 'embeddable' => false, 'public_stats' => true, 'made_for_kids' => true, 'privacy' => 'unlisted' ] );
+
+		$body = $this->putBody();
+		$this->assertSame( '27', $body['snippet']['categoryId'] );
+		$this->assertFalse( $body['status']['embeddable'] );
+		$this->assertTrue( $body['status']['publicStatsViewable'] );
+		$this->assertTrue( $body['status']['selfDeclaredMadeForKids'] );
+		$this->assertSame( 'unlisted', $body['status']['privacyStatus'] );
+	}
+
+	public function test_takes_keywords_out_and_puts_new_ones_in(): void {
+		$this->responses = [ self::video(), [ 'status' => 200, 'headers' => [], 'body' => '{}' ] ];
+
+		$this->updater()->update( 'abcDEF_-123', [ 'keywords_remove' => [ 'A' ], 'keywords' => [ 'c' ] ] );
+
+		$this->assertSame( [ 'b', 'c' ], $this->putBody()['snippet']['tags'] );
+	}
+
+	public function test_a_snapshot_is_the_video_as_read(): void {
+		$this->responses = [ self::video() ];
+
+		$this->assertSame( 'Old title', $this->updater()->snapshot( 'abcDEF_-123' )['snippet']['title'] );
+		$this->assertCount( 1, $this->requests );
 	}
 }

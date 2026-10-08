@@ -78,6 +78,35 @@ final class PlaylistClient {
 	}
 
 	/**
+	 * The ids of the items of a playlist that hold a video (normally one).
+	 *
+	 * @return string[]
+	 * @throws PlaylistException
+	 */
+	public function itemIds( string $playlistId, string $youtubeId ): array {
+		$response = $this->send( 'GET', self::ITEMS_ENDPOINT . '?part=id&maxResults=50&playlistId=' . rawurlencode( $playlistId ) . '&videoId=' . rawurlencode( $youtubeId ), '' );
+		$data     = json_decode( $response['body'], true );
+		$ids      = [];
+
+		foreach ( is_array( $data ) ? (array) ( $data['items'] ?? [] ) : [] as $item ) {
+			if ( isset( $item['id'] ) ) {
+				$ids[] = (string) $item['id'];
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Takes an item out of its playlist.
+	 *
+	 * @throws PlaylistException
+	 */
+	public function remove( string $itemId ): void {
+		$this->send( 'DELETE', self::ITEMS_ENDPOINT . '?id=' . rawurlencode( $itemId ), '' );
+	}
+
+	/**
 	 * @throws PlaylistException
 	 */
 	public function add( string $playlistId, string $youtubeId ): void {
@@ -118,7 +147,8 @@ final class PlaylistClient {
 			);
 		}
 
-		if ( 200 !== $response['status'] ) {
+		// A deletion is answered with 204 (no content).
+		if ( 200 !== $response['status'] && ! ( 'DELETE' === $method && 204 === $response['status'] ) ) {
 			throw new PlaylistException( ApiErrors::describe( $response['status'], $response['body'] ), ApiErrors::isQuota( $response['status'], $response['body'] ) );
 		}
 

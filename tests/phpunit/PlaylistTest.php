@@ -131,4 +131,21 @@ class PlaylistTest extends TestCase {
 		$this->assertSame( [], $result->added );
 		$this->assertCount( 1, $this->requests );
 	}
+
+	public function test_finds_the_items_of_a_video_and_deletes_them(): void {
+		$this->responses = [ self::json( [ 'items' => [ [ 'id' => 'item1' ], [ 'id' => 'item2' ] ] ] ), [ 'status' => 204, 'headers' => [], 'body' => '' ] ];
+		$client          = $this->client();
+
+		$this->assertSame( [ 'item1', 'item2' ], $client->itemIds( 'PLaaaaaaaaaaa', 'vid' ) );
+		$client->remove( 'item1' );
+
+		$this->assertSame( 'DELETE', $this->requests[1]['method'] );
+		$this->assertSame( 'https://www.googleapis.com/youtube/v3/playlistItems?id=item1', $this->requests[1]['url'] );
+	}
+
+	public function test_a_refused_deletion_is_an_error(): void {
+		$this->responses = [ self::json( [ 'error' => [ 'message' => 'no' ] ], 403 ) ];
+		$this->expectException( PlaylistException::class );
+		$this->client()->remove( 'item1' );
+	}
 }
