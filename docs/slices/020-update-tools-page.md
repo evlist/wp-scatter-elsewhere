@@ -103,3 +103,23 @@ the log. A job started from the command line (slice 018) is not recorded here.
    always current, one more read per video (1 unit), and a video edited meanwhile on YouTube is not
    overwritten with stale values. The preview is therefore only an announcement of what the run
    is expected to do.
+
+## Status
+
+- Status: implemented. `Update/BatchPlan` (validation shared with the command), `BatchJob`,
+  `BatchJobStore` (the last 20 jobs and, in separate options, their logs of up to 5,000 entries) and
+  `BatchRunner` (steps of 20 seconds, lock, stop honoured between two videos, pause until after the reset of
+  the quota, resume) are pure and tested. `Update\WordPressFactory` builds the selection, processes a video
+  and schedules the steps with WP-Cron (`wp_scatter_elsewhere_process_batch`). `Rest/ToolsController` has
+  `tools/update-preview`, `update-start`, `update-status`, `update-stop`, `update-resume` and
+  `update-log`; `Admin/UpdateToolsPage` and `assets/js/update-tools.js` are the page, tested with the
+  jsdom harness.
+- The command of slice 018 uses the same plan, selection and video processing.
+- The job recomputes the differences at each video (the preview only announces them); the log keeps the
+  previous value of each change and the errors, and videos that already match leave no entry. It is
+  exported as CSV by the page.
+- While a job is running, the page asks WP-Cron to run (`spawn_cron()`) each time it polls, so the update
+  advances while the page is open even on a quiet site; with the page closed it advances with the visits
+  of the site, or with a real cron job calling `wp-cron.php`.
+- Not done: a restore function from the log (the log gives the values to restore by hand or with a later
+  run).

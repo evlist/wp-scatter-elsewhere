@@ -141,6 +141,13 @@ the default `add` never removes. `--post`, `--since`, `--until`, `--term=taxonom
 choose the videos, and `--quota-limit` (by default the quota left today) stops the run between two
 videos; running the command again continues, since videos that match are left alone.
 
+The same update is available in the administration, **Tools > Scatter Elsewhere - Update videos**: tick
+the fields, choose the videos (dates, term, post IDs, maximum), **Preview** the differences (old value,
+new value, quota), then **Start the update**. It runs in the background in short steps (WP-Cron), shows its
+progress, can be stopped and resumed, waits for the reset of the quota when the day's quota is used up, and
+keeps a log with the previous value of every change that can be exported as CSV. Only one update runs at a
+time. Titles, descriptions and privacy ask for an extra confirmation.
+
 ## Quota
 
 YouTube gives 10,000 units a day (an upload costs about 1,600). The plugin counts the units it

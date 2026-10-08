@@ -19,11 +19,9 @@ use WP_Scatter_Elsewhere\Matching\WordPressFactory as MatchingFactory;
 use WP_Scatter_Elsewhere\Publication\LinkException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Thumbnails\WordPressFactory as ThumbnailFactory;
-use WP_Scatter_Elsewhere\Update\BatchUpdater;
-use WP_Scatter_Elsewhere\Update\ManagedSets;
+use WP_Scatter_Elsewhere\Update\BatchPlan;
 use WP_Scatter_Elsewhere\Update\VideoDiff;
 use WP_Scatter_Elsewhere\Update\WordPressFactory as UpdateFactory;
-use WP_Scatter_Elsewhere\Rules\WordPressFactory as RulesFactory;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadException;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadJob;
 use WP_Scatter_Elsewhere\YouTube\Upload\UploadService;
@@ -845,32 +843,30 @@ final class Command {
 	 * @param array<string, mixed> $assoc
 	 */
 	public function update_videos( array $args, array $assoc ): void {
-		$fields    = $this->updateFields( (string) ( $assoc['fields'] ?? '' ) );
-		$apply     = ! empty( $assoc['apply'] );
-		$privacy   = isset( $assoc['privacy'] ) ? (string) $assoc['privacy'] : null;
-		$keywords  = (string) ( $assoc['keywords'] ?? VideoDiff::MODE_ADD );
-		$playlists = (string) ( $assoc['playlists'] ?? VideoDiff::MODE_ADD );
-		$pause     = max( 0, (int) ( $assoc['pause'] ?? 200 ) );
+		$apply = ! empty( $assoc['apply'] );
+		$pause = max( 0, (int) ( $assoc['pause'] ?? 200 ) );
 
-		foreach ( [ $keywords, $playlists ] as $mode ) {
-			if ( ! in_array( $mode, [ VideoDiff::MODE_ADD, VideoDiff::MODE_SYNC ], true ) ) {
-				WP_CLI::error( __( 'The mode must be add or sync.', 'wp-scatter-elsewhere' ) );
-			}
+		try {
+			$plan = BatchPlan::fromArray(
+				[
+					'fields'    => (string) ( $assoc['fields'] ?? '' ),
+					'keywords'  => (string) ( $assoc['keywords'] ?? VideoDiff::MODE_ADD ),
+					'playlists' => (string) ( $assoc['playlists'] ?? VideoDiff::MODE_ADD ),
+					'privacy'   => $assoc['privacy'] ?? null,
+					'posts'     => (string) ( $assoc['post'] ?? '' ),
+					'since'     => $assoc['since'] ?? null,
+					'until'     => $assoc['until'] ?? null,
+					'term'      => (string) ( $assoc['term'] ?? '' ),
+					'limit'     => (int) ( $assoc['limit'] ?? 0 ),
+				]
+			);
+		} catch ( InvalidArgumentException $e ) {
+			WP_CLI::error( $e->getMessage() );
 		}
 
-		if ( in_array( 'privacy', $fields, true ) && ( null === $privacy || ! \WP_Scatter_Elsewhere\Settings\UploadSettings::isValidPrivacy( $privacy ) ) ) {
-			WP_CLI::error( __( 'The field privacy needs --privacy=private, unlisted or public.', 'wp-scatter-elsewhere' ) );
-		}
-
-		$meter = WordPressFactory::quotaMeter();
-		$limit = isset( $assoc['quota-limit'] ) ? max( 0, (int) $assoc['quota-limit'] ) : $meter->remaining();
-
-		$rules     = RulesFactory::settings()->rules();
-		$managedKw = ManagedSets::keywords( $rules );
-		$managedPl = ManagedSets::playlists( $rules );
-		$updater   = UpdateFactory::batchUpdater();
-		$builder   = MetadataFactory::videoMetadataBuilder();
-		$targets   = $this->updateTargets( $assoc );
+		$meter   = WordPressFactory::quotaMeter();
+		$limit   = isset( $assoc['quota-limit'] ) ? max( 0, (int) $assoc['quota-limit'] ) : $meter->remaining();
+		$targets = UpdateFactory::targets( $plan );
 
 		$rows    = [];
 		$spent   = 0;
@@ -880,17 +876,8 @@ final class Command {
 		$stopped = false;
 
 		foreach ( $targets as $number => $target ) {
-			$post = get_post( $target['post'] );
-			if ( ! $post instanceof \WP_Post ) {
-				continue;
-			}
-
-			$desired = $builder->build( MetadataFactory::postData( $post ) );
-
-			// The most a video can cost, to stop before the limit rather than in the middle of a video.
-			$worst = 52 + ( in_array( 'playlists', $fields, true ) ? 51 * ( count( $desired->playlists ) + count( $managedPl ) ) : 0 )
-				+ ( in_array( 'thumbnail', $fields, true ) ? 50 : 0 ) + ( in_array( 'subtitles', $fields, true ) ? 400 : 0 );
-			if ( $apply && $spent + $worst > $limit ) {
+			// Stop before the limit rather than in the middle of a video.
+			if ( $apply && $spent + UpdateFactory::worstCase( $plan, $target ) > $limit ) {
 				$stopped = true;
 				WP_CLI::warning( __( 'The quota limit would be exceeded by the next video: stopping. Run the command again to continue.', 'wp-scatter-elsewhere' ) );
 				break;
@@ -900,18 +887,7 @@ final class Command {
 				usleep( $pause * 1000 );
 			}
 
-			$report = $updater->process(
-				$target['youtube'],
-				$desired,
-				$fields,
-				$keywords,
-				$playlists,
-				$managedKw,
-				$managedPl,
-				$privacy,
-				$apply,
-				$this->updateActions( $fields, $post, $target['video'], $target['youtube'] )
-			);
+			$report = UpdateFactory::processVideo( $plan, $target, $apply );
 
 			++$done;
 			$spent  += $report->cost;
@@ -953,150 +929,6 @@ final class Command {
 		} else {
 			WP_CLI::success( __( 'Done.', 'wp-scatter-elsewhere' ) );
 		}
-	}
-
-	/**
-	 * @return string[]
-	 */
-	private function updateFields( string $list ): array {
-		$fields = array_values( array_filter( array_map( 'trim', explode( ',', $list ) ) ) );
-
-		if ( [] === $fields ) {
-			WP_CLI::error( __( 'Say which fields to update with --fields (see the help of the command).', 'wp-scatter-elsewhere' ) );
-		}
-
-		if ( in_array( 'all-safe', $fields, true ) ) {
-			$fields = array_merge( array_diff( $fields, [ 'all-safe' ] ), array_diff( BatchUpdater::FIELDS, [ 'title', 'description', 'privacy' ] ) );
-		}
-
-		foreach ( $fields as $field ) {
-			if ( ! in_array( $field, BatchUpdater::FIELDS, true ) ) {
-				WP_CLI::error( sprintf( /* translators: %s: field name. */ __( 'Unknown field: %s', 'wp-scatter-elsewhere' ), $field ) );
-			}
-		}
-
-		return array_values( array_unique( $fields ) );
-	}
-
-	/**
-	 * The linked videos to examine, oldest post first.
-	 *
-	 * @param array<string, mixed> $assoc
-	 * @return array<int, array{post: int, video: string, youtube: string}>
-	 */
-	private function updateTargets( array $assoc ): array {
-		$only  = ! empty( $assoc['post'] ) ? array_map( 'intval', explode( ',', (string) $assoc['post'] ) ) : null;
-		$since = ! empty( $assoc['since'] ) ? (int) strtotime( (string) $assoc['since'] . ' 00:00:00' ) : null;
-		$until = ! empty( $assoc['until'] ) ? (int) strtotime( (string) $assoc['until'] . ' 23:59:59' ) : null;
-		[ $taxonomy, $slug ] = array_pad( explode( ':', (string) ( $assoc['term'] ?? '' ), 2 ), 2, '' );
-		$limit = isset( $assoc['limit'] ) ? max( 1, (int) $assoc['limit'] ) : PHP_INT_MAX;
-
-		$targets = [];
-		foreach ( PublicationFactory::linkIndex()->map() as $youtube => $link ) {
-			$postId = $link['post_id'];
-			$post   = get_post( $postId );
-			if ( ! $post instanceof \WP_Post || ( null !== $only && ! in_array( $postId, $only, true ) ) ) {
-				continue;
-			}
-
-			$time = (int) get_post_timestamp( $post );
-			if ( ( null !== $since && $time < $since ) || ( null !== $until && $time > $until ) ) {
-				continue;
-			}
-
-			if ( '' !== $slug && ! $this->postHasTerm( $postId, $taxonomy, $slug ) ) {
-				continue;
-			}
-
-			$targets[] = [ 'post' => $postId, 'video' => $link['video_id'], 'youtube' => (string) $youtube, 'time' => $time ];
-		}
-
-		usort( $targets, static fn( array $a, array $b ): int => $a['time'] <=> $b['time'] );
-
-		return array_map(
-			static fn( array $target ): array => [ 'post' => $target['post'], 'video' => $target['video'], 'youtube' => $target['youtube'] ],
-			array_slice( $targets, 0, $limit )
-		);
-	}
-
-	/**
-	 * Whether a post has a term or one of its descendants.
-	 */
-	private function postHasTerm( int $postId, string $taxonomy, string $slug ): bool {
-		$term = get_term_by( 'slug', $slug, $taxonomy );
-		if ( ! $term instanceof \WP_Term ) {
-			return false;
-		}
-
-		foreach ( wp_get_object_terms( $postId, $taxonomy ) as $postTerm ) {
-			if ( $postTerm instanceof \WP_Term && ( $postTerm->term_id === $term->term_id || term_is_ancestor_of( $term->term_id, $postTerm->term_id, $taxonomy ) ) ) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	/**
-	 * What to do for the fields that are sent again whatever YouTube holds.
-	 *
-	 * @param string[] $fields
-	 * @return array<string, \Closure():string>
-	 */
-	private function updateActions( array $fields, \WP_Post $post, string $videoId, string $youtubeId ): array {
-		$actions = [];
-
-		if ( in_array( 'thumbnail', $fields, true ) ) {
-			$actions['thumbnail'] = static function () use ( $post, $youtubeId ): string {
-				$image = MetadataFactory::postData( $post )->featuredImagePath;
-				if ( null === $image ) {
-					throw new InvalidArgumentException( __( 'This post has no featured image, or its file cannot be read.', 'wp-scatter-elsewhere' ) );
-				}
-
-				ThumbnailFactory::service()->send( $youtubeId, $image );
-
-				return basename( $image );
-			};
-		}
-
-		if ( in_array( 'subtitles', $fields, true ) ) {
-			$actions['subtitles'] = function () use ( $post, $videoId, $youtubeId ): string {
-				$video = null;
-				try {
-					foreach ( WordPressDetectorFactory::create()->detect( $post->ID ) as $detected ) {
-						if ( $detected->id === $videoId ) {
-							$video = $detected;
-						}
-					}
-				} catch ( DetectionException $e ) {
-					throw new InvalidArgumentException( $e->getMessage() );
-				}
-
-				if ( null === $video ) {
-					throw new InvalidArgumentException( __( 'No video with this ID in the page of the post.', 'wp-scatter-elsewhere' ) );
-				}
-
-				$tracks = [];
-				foreach ( $video->subtitles as $track ) {
-					if ( $track->isUsable() ) {
-						$tracks[] = [ 'language' => (string) $track->language, 'path' => $track->file->path, 'name' => (string) $track->label ];
-					}
-				}
-
-				if ( [] === $tracks ) {
-					throw new InvalidArgumentException( __( 'No usable subtitle track in the page of this post.', 'wp-scatter-elsewhere' ) );
-				}
-
-				$result = WordPressFactory::subtitleService()->sync( $youtubeId, $tracks, null );
-				if ( $result->hasErrors() ) {
-					throw new InvalidArgumentException( $result->errorSummary() );
-				}
-
-				return implode( ', ', array_keys( $result->actions ) );
-			};
-		}
-
-		return $actions;
 	}
 
 	/**

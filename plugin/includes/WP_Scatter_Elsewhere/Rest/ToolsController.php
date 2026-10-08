@@ -4,6 +4,7 @@
 
 namespace WP_Scatter_Elsewhere\Rest;
 
+use InvalidArgumentException;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -11,6 +12,9 @@ use WP_REST_Server;
 use WP_Scatter_Elsewhere\Matching\Suggestion;
 use WP_Scatter_Elsewhere\Matching\WordPressFactory as MatchingFactory;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
+use WP_Scatter_Elsewhere\Update\BatchJob;
+use WP_Scatter_Elsewhere\Update\BatchPlan;
+use WP_Scatter_Elsewhere\Update\WordPressFactory as UpdateFactory;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
 use WP_Scatter_Elsewhere\YouTube\YouTubeConnectionException;
 
@@ -32,6 +36,12 @@ final class ToolsController {
 			'/tools/link-apply' => [ WP_REST_Server::CREATABLE, 'linkApply' ],
 			'/tools/link-undo'  => [ WP_REST_Server::CREATABLE, 'linkUndo' ],
 			'/tools/link-runs'  => [ WP_REST_Server::READABLE, 'linkRuns' ],
+			'/tools/update-preview' => [ WP_REST_Server::CREATABLE, 'updatePreview' ],
+			'/tools/update-start'   => [ WP_REST_Server::CREATABLE, 'updateStart' ],
+			'/tools/update-status'  => [ WP_REST_Server::READABLE, 'updateStatus' ],
+			'/tools/update-stop'    => [ WP_REST_Server::CREATABLE, 'updateStop' ],
+			'/tools/update-resume'  => [ WP_REST_Server::CREATABLE, 'updateResume' ],
+			'/tools/update-log'     => [ WP_REST_Server::READABLE, 'updateLog' ],
 		];
 
 		foreach ( $routes as $route => [ $methods, $callback ] ) {
@@ -168,6 +178,151 @@ final class ToolsController {
 		MatchingFactory::runLog()->forget( $runId, $undone );
 
 		return new WP_REST_Response( [ 'undone' => count( $undone ), 'runs' => $this->runs() ] );
+	}
+
+	/**
+	 * Reads the next videos of the selection and reports what the update would change. Nothing is sent to YouTube.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function updatePreview( WP_REST_Request $request ) {
+		try {
+			$plan = BatchPlan::fromArray( (array) $request->get_json_params() + (array) $request->get_body_params() );
+		} catch ( InvalidArgumentException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_plan', $e->getMessage(), [ 'status' => 400 ] );
+		}
+
+		$targets = UpdateFactory::targets( $plan );
+		$cursor  = max( 0, (int) $request->get_param( 'cursor' ) );
+		$slice   = array_slice( $targets, $cursor, min( 5, max( 1, (int) ( $request->get_param( 'size' ) ?: 5 ) ) ) );
+		$rows    = [];
+		$cost    = 0;
+		$changed = 0;
+		$errors  = 0;
+
+		foreach ( $slice as $target ) {
+			$report = UpdateFactory::processVideo( $plan, $target, false );
+			$cost  += $report->cost;
+			$errors += $report->errors;
+			$changed += $report->changed() ? 1 : 0;
+
+			foreach ( $report->rows as $row ) {
+				$rows[] = array_merge( [ 'post' => $target['post'], 'title' => wp_strip_all_tags( get_the_title( $target['post'] ) ), 'youtube' => $target['youtube'] ], $row );
+			}
+
+			if ( $report->stopped ) {
+				break;
+			}
+		}
+
+		$next = $cursor + count( $slice );
+
+		return new WP_REST_Response(
+			[
+				'rows'    => $rows,
+				'examined' => count( $slice ),
+				'changed' => $changed,
+				'errors'  => $errors,
+				'cost'    => $cost,
+				'next'    => $next < count( $targets ) ? $next : null,
+				'total'   => count( $targets ),
+				'quota'   => $this->quota(),
+			]
+		);
+	}
+
+	/**
+	 * Starts the update in the background. The selection is computed again here: the page is not trusted.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function updateStart( WP_REST_Request $request ) {
+		try {
+			$plan = BatchPlan::fromArray( (array) $request->get_json_params() + (array) $request->get_body_params() );
+			$job  = UpdateFactory::runner()->start( $plan, UpdateFactory::targets( $plan ) );
+		} catch ( InvalidArgumentException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_plan', $e->getMessage(), [ 'status' => 400 ] );
+		}
+
+		if ( function_exists( 'spawn_cron' ) ) {
+			spawn_cron();
+		}
+
+		return new WP_REST_Response( $this->updateState() );
+	}
+
+	public function updateStatus(): WP_REST_Response {
+		// A job that is due is pushed along by the visit of the page, not only by the next request of the site.
+		$active = UpdateFactory::store()->active();
+		if ( null !== $active && $active->pauseUntil() <= time() && function_exists( 'spawn_cron' ) ) {
+			spawn_cron();
+		}
+
+		return new WP_REST_Response( $this->updateState() );
+	}
+
+	public function updateStop( WP_REST_Request $request ): WP_REST_Response {
+		UpdateFactory::runner()->stop( sanitize_key( (string) $request->get_param( 'job' ) ) );
+
+		return new WP_REST_Response( $this->updateState() );
+	}
+
+	/**
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function updateResume( WP_REST_Request $request ) {
+		try {
+			UpdateFactory::runner()->resume( sanitize_key( (string) $request->get_param( 'job' ) ) );
+		} catch ( InvalidArgumentException $e ) {
+			return new WP_Error( 'wp_scatter_elsewhere_busy', $e->getMessage(), [ 'status' => 409 ] );
+		}
+
+		if ( function_exists( 'spawn_cron' ) ) {
+			spawn_cron();
+		}
+
+		return new WP_REST_Response( $this->updateState() );
+	}
+
+	/**
+	 * The changes of a job with their previous values, for the export.
+	 */
+	public function updateLog( WP_REST_Request $request ): WP_REST_Response {
+		$entries = array_map(
+			static function ( array $entry ): array {
+				$entry['title'] = wp_strip_all_tags( get_the_title( (int) ( $entry['post'] ?? 0 ) ) );
+
+				return $entry;
+			},
+			UpdateFactory::store()->log( sanitize_key( (string) $request->get_param( 'job' ) ) )
+		);
+
+		return new WP_REST_Response( [ 'entries' => $entries ] );
+	}
+
+	/**
+	 * @return array{jobs: array<int, array<string, mixed>>, quota: array<string, mixed>}
+	 */
+	private function updateState(): array {
+		$jobs = array_map(
+			static fn( BatchJob $job ): array => [
+				'id'          => $job->id(),
+				'status'      => $job->status(),
+				'cursor'      => $job->cursor(),
+				'total'       => $job->total(),
+				'changed'     => $job->changed(),
+				'unchanged'   => $job->unchanged(),
+				'errors'      => $job->errors(),
+				'cost'        => $job->cost(),
+				'message'     => $job->message(),
+				'pause_until' => $job->pauseUntil(),
+				'created_at'  => $job->createdAt(),
+				'plan'        => $job->plan()->toArray(),
+			],
+			UpdateFactory::store()->all()
+		);
+
+		return [ 'jobs' => $jobs, 'quota' => $this->quota() ];
 	}
 
 	public function linkRuns(): WP_REST_Response {

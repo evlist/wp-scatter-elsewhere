@@ -7,6 +7,7 @@ namespace WP_Scatter_Elsewhere\Admin;
 use WP_Scatter_Elsewhere\Cli\Command;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Rest\ToolsController;
+use WP_Scatter_Elsewhere\Update\WordPressFactory as UpdateFactory;
 use WP_Scatter_Elsewhere\Rest\YouTubeController;
 use WP_Scatter_Elsewhere\YouTube\WordPressFactory;
 
@@ -18,6 +19,7 @@ class Bootstrap {
 		new YouTubeController();
 		new ToolsController();
 		new LinkToolsPage();
+		new UpdateToolsPage();
 
 		add_shortcode( 'scatter_elsewhere_youtube_link', [ PublicationFactory::class, 'shortcode' ] );
 
@@ -26,6 +28,14 @@ class Bootstrap {
 			static function ( string $jobId ): void {
 				// WP-Cron runs are short: the uploader sends chunks for 20 seconds, then reschedules itself.
 				WordPressFactory::uploadService()->process( $jobId, 20 );
+			}
+		);
+
+		add_action(
+			UpdateFactory::HOOK,
+			static function ( string $jobId ): void {
+				// Like the uploads: short steps of 20 seconds that reschedule themselves.
+				UpdateFactory::runner()->step( $jobId, 20 );
 			}
 		);
 
