@@ -376,7 +376,11 @@ final class Command {
 		$uploads = WordPressFactory::uploadService();
 		$entries = [];
 		$errors  = [];
-		$posts   = $this->postsToExamine( $assoc );
+		$posts   = MatchingFactory::postsWithVideo(
+			! empty( $assoc['post'] ) ? array_map( 'intval', explode( ',', (string) $assoc['post'] ) ) : null,
+			! empty( $assoc['since'] ) ? (string) $assoc['since'] : null,
+			isset( $assoc['limit'] ) ? max( 1, (int) $assoc['limit'] ) : 0
+		);
 
 		foreach ( $posts as $number => $postId ) {
 			if ( $number > 0 && $pause > 0 ) {
@@ -446,47 +450,6 @@ final class Command {
 				/* translators: %d: number of links that --apply would record. */
 				: sprintf( __( 'Nothing was recorded: %d video(s) would be linked with --apply.', 'wp-scatter-elsewhere' ), $would )
 		);
-	}
-
-	/**
-	 * The published posts to examine, oldest first: those whose content mentions a video.
-	 *
-	 * @param array<string, mixed> $assoc
-	 * @return int[]
-	 */
-	private function postsToExamine( array $assoc ): array {
-		$query = [
-			'post_type'      => 'any',
-			'post_status'    => 'publish',
-			'posts_per_page' => -1,
-			'orderby'        => 'date',
-			'order'          => 'ASC',
-			'fields'         => 'ids',
-			'no_found_rows'  => true,
-		];
-
-		if ( ! empty( $assoc['post'] ) ) {
-			$query['post__in'] = array_map( 'intval', explode( ',', (string) $assoc['post'] ) );
-		}
-
-		if ( ! empty( $assoc['since'] ) ) {
-			$query['date_query'] = [ [ 'after' => (string) $assoc['since'], 'inclusive' => true ] ];
-		}
-
-		$limit = isset( $assoc['limit'] ) ? max( 1, (int) $assoc['limit'] ) : PHP_INT_MAX;
-		$ids   = [];
-
-		foreach ( get_posts( $query ) as $postId ) {
-			if ( false !== stripos( (string) get_post_field( 'post_content', (int) $postId ), 'video' ) ) {
-				$ids[] = (int) $postId;
-			}
-
-			if ( count( $ids ) >= $limit ) {
-				break;
-			}
-		}
-
-		return $ids;
 	}
 
 	/**

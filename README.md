@@ -68,6 +68,11 @@ once, fetches the page of each post that mentions a video, and **only reports** 
 `--apply` to link those that reach the confidence (high by default, with the checks of the editor
 link). A YouTube video wanted by several videos of the blog is never linked automatically, and the
 report ends with the `unlink` command of everything that was linked.
+The same linking is available in the administration: **Tools > Scatter Elsewhere - Link videos**
+scans the posts a few at a time (with a progress bar and a Stop button), shows for each video the
+proposed YouTube video with the reasons, pre-ticks the confident matches, lets you pick another
+video of the channel, and links the ticked ones. The last links can be undone, in whole or one by
+one.
 From WP-CLI: `wp scatter-elsewhere channel-videos [--search=<words>] [--unlinked] [--limit=<n>] [--refresh]`.
 
 ## Uploading a video

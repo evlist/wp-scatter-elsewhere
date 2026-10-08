@@ -15,6 +15,112 @@ final class WordPressFactory {
 		return new VideoSuggester( PublicationFactory::channelCatalog(), new VideoMatcher() );
 	}
 
+	public static function scan(): BulkScan {
+		$matcher = new VideoMatcher();
+
+		return new BulkScan( new BulkLinker( $matcher ), $matcher );
+	}
+
+	public static function applier(): BulkApplier {
+		$service = PublicationFactory::linkService();
+
+		return new BulkApplier(
+			static function ( int $postId, string $videoId, string $youtubeId ) use ( $service ): void {
+				$service->link( $postId, $videoId, $youtubeId );
+			}
+		);
+	}
+
+	public static function runLog(): LinkRunLog {
+		return new LinkRunLog(
+			static fn(): mixed => get_option( 'wp_scatter_elsewhere_link_runs', false ),
+			static function ( array $runs ): void {
+				update_option( 'wp_scatter_elsewhere_link_runs', $runs, false );
+			},
+			static fn(): int => time(),
+			static fn(): string => 'r' . bin2hex( random_bytes( 6 ) )
+		);
+	}
+
+	/**
+	 * The published posts that mention a video, oldest first.
+	 *
+	 * @param int[]|null $only         Only these posts.
+	 * @param ?string    $since        Only the posts dated on or after this date (YYYY-MM-DD).
+	 * @param int        $limit        Maximum number of posts, 0 for all of them.
+	 * @param bool       $unlinkedOnly Leave out the posts that already have a linked video.
+	 * @return int[]
+	 */
+	public static function postsWithVideo( ?array $only = null, ?string $since = null, int $limit = 0, bool $unlinkedOnly = false ): array {
+		$query = [
+			'post_type'      => 'any',
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'orderby'        => 'date',
+			'order'          => 'ASC',
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+		];
+
+		if ( null !== $only ) {
+			$query['post__in'] = $only;
+		}
+
+		if ( null !== $since && '' !== $since ) {
+			$query['date_query'] = [ [ 'after' => $since, 'inclusive' => true ] ];
+		}
+
+		$linkedPosts = [];
+		if ( $unlinkedOnly ) {
+			foreach ( PublicationFactory::linkIndex()->map() as $link ) {
+				$linkedPosts[ $link['post_id'] ] = true;
+			}
+		}
+
+		$ids = [];
+		foreach ( get_posts( $query ) as $postId ) {
+			if ( isset( $linkedPosts[ (int) $postId ] ) || false === stripos( (string) get_post_field( 'post_content', (int) $postId ), 'video' ) ) {
+				continue;
+			}
+
+			$ids[] = (int) $postId;
+			if ( $limit > 0 && count( $ids ) >= $limit ) {
+				break;
+			}
+		}
+
+		return $ids;
+	}
+
+	/**
+	 * Reads a post for the scan: its facts, the videos of its page and which of them are linked.
+	 *
+	 * @return array{facts: PostFacts, videos: string[], linked: array<string, bool>}
+	 * @throws \RuntimeException When the post or its page cannot be read.
+	 */
+	public static function examine( int $postId ): array {
+		$facts = self::postFacts( $postId );
+		if ( null === $facts ) {
+			throw new \RuntimeException( __( 'This post does not exist.', 'wp-scatter-elsewhere' ) );
+		}
+
+		try {
+			$detected = \WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory::create()->detect( $postId );
+		} catch ( \WP_Scatter_Elsewhere\Detection\DetectionException $e ) {
+			throw new \RuntimeException( $e->getMessage() );
+		}
+
+		$uploads = \WP_Scatter_Elsewhere\YouTube\WordPressFactory::uploadService();
+		$videos  = [];
+		$linked  = [];
+		foreach ( $detected as $video ) {
+			$videos[]                = $video->id;
+			$linked[ $video->id ] = null !== $uploads->publicationFor( $postId, $video->id );
+		}
+
+		return [ 'facts' => $facts, 'videos' => $videos, 'linked' => $linked ];
+	}
+
 	public static function postFacts( int $postId ): ?PostFacts {
 		$post = get_post( $postId );
 		if ( ! $post instanceof \WP_Post ) {

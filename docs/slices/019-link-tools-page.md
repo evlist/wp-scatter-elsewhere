@@ -103,3 +103,19 @@ everything the page claims (the page is never trusted for a decision).
 1. A progress bar driven by the browser stops when the tab is closed; a WP-Cron scan (as the
    uploads) would not. It is left out here because the review needs the author at the screen
    anyway.
+
+## Status
+
+- Status: implemented. `Matching/BulkScan` (chunks and cursor over a list of posts, pure),
+  `BulkApplier` (refuses a YouTube video ticked twice, goes through the link service) and `LinkRunLog`
+  (the last 20 runs, for the undo) are pure and tested; `Rest/ToolsController` has the routes
+  `tools/link-scan`, `link-apply`, `link-undo` and `link-runs`; `Admin/LinkToolsPage` and
+  `assets/js/link-tools.js` are the page, tested with the jsdom harness.
+- The command of slice 017 and the page share `Matching\WordPressFactory::postsWithVideo()`.
+- The conflicts between rows (a YouTube video proposed to several videos of the blog) are detected
+  by the page over all the rows scanned, since the chunks are examined separately; the server
+  refuses a video ticked twice in the same request and the link service refuses one that is
+  linked elsewhere.
+- An undo removes a link only if it still points at the YouTube video logged for the run.
+- The page offers "Choose another" on every row, which searches the unlinked videos of the channel
+  with the route of slice 015.
