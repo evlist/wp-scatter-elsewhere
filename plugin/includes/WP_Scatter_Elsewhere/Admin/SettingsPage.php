@@ -137,6 +137,7 @@ class SettingsPage {
 				'term'             => $term,
 				'playlist_id'      => sanitize_text_field( (string) ( $row['playlist_id'] ?? '' ) ),
 				'keyword'          => sanitize_text_field( (string) ( $row['keyword'] ?? '' ) ),
+				'category_id'      => sanitize_text_field( (string) ( $row['category_id'] ?? '' ) ),
 				'include_children' => ! empty( $row['include_children'] ),
 				'remove'           => ! empty( $row['remove'] ),
 			];
@@ -377,11 +378,11 @@ class SettingsPage {
 
 		$rows = array_map( static fn( $rule ): array => $rule->toArray(), $rules );
 		for ( $i = 0; $i < self::BLANK_RULE_ROWS; $i++ ) {
-			$rows[] = [ 'taxonomy' => '', 'term' => '', 'playlist_id' => '', 'keyword' => '', 'include_children' => false ];
+			$rows[] = [ 'taxonomy' => '', 'term' => '', 'playlist_id' => '', 'keyword' => '', 'category_id' => '', 'include_children' => false ];
 		}
 		?>
-		<h3><?php echo esc_html__( 'Playlists and keywords', 'wp-scatter-elsewhere' ); ?></h3>
-		<p class="description"><?php echo esc_html__( 'The categories and tags of a post put its video in playlists and give it keywords. A row needs a playlist, a keyword, or both. Terms that are not listed are ignored. Nothing is removed when a post changes.', 'wp-scatter-elsewhere' ); ?></p>
+		<h3><?php echo esc_html__( 'Playlists, keywords and category', 'wp-scatter-elsewhere' ); ?></h3>
+		<p class="description"><?php echo esc_html__( 'The categories and tags of a post put its video in playlists and give it keywords. A row needs a playlist, a keyword, a category, or several. A video has a single category: the most specific matching term decides (a sub-term before its parent), the first row on a tie, and the default category of the uploads applies when no row gives one. Terms that are not listed are ignored. Nothing is removed when a post changes.', 'wp-scatter-elsewhere' ); ?></p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_RULES ); ?>" />
 			<?php wp_nonce_field( self::ACTION_RULES ); ?>
@@ -391,6 +392,7 @@ class SettingsPage {
 						<th><?php echo esc_html__( 'Term', 'wp-scatter-elsewhere' ); ?></th>
 						<th><?php echo esc_html__( 'Playlist', 'wp-scatter-elsewhere' ); ?></th>
 						<th><?php echo esc_html__( 'Keyword', 'wp-scatter-elsewhere' ); ?></th>
+						<th><?php echo esc_html__( 'Category', 'wp-scatter-elsewhere' ); ?></th>
 						<th><?php echo esc_html__( 'Sub-terms', 'wp-scatter-elsewhere' ); ?></th>
 						<th><?php echo esc_html__( 'Remove', 'wp-scatter-elsewhere' ); ?></th>
 					</tr>
@@ -428,6 +430,7 @@ class SettingsPage {
 								<?php endif; ?>
 							</td>
 							<td><input type="text" class="regular-text" name="rules[<?php echo esc_attr( (string) $index ); ?>][keyword]" value="<?php echo esc_attr( $row['keyword'] ); ?>" /></td>
+							<td><input type="text" class="small-text code" name="rules[<?php echo esc_attr( (string) $index ); ?>][category_id]" value="<?php echo esc_attr( $row['category_id'] ); ?>" title="<?php echo esc_attr__( 'Number of a YouTube category, such as 19 (Travel & Events)', 'wp-scatter-elsewhere' ); ?>" /></td>
 							<td><input type="checkbox" name="rules[<?php echo esc_attr( (string) $index ); ?>][include_children]" value="1" <?php checked( $row['include_children'] ); ?> title="<?php echo esc_attr__( 'Also apply to the posts that have a sub-term of this term', 'wp-scatter-elsewhere' ); ?>" /></td>
 							<td><input type="checkbox" name="rules[<?php echo esc_attr( (string) $index ); ?>][remove]" value="1" /></td>
 						</tr>

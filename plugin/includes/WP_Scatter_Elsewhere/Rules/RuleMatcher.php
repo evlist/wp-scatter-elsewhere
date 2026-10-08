@@ -15,12 +15,21 @@ final class RuleMatcher {
 	 * @param TermRule[] $rules In the order of the table.
 	 */
 	public function match( array $rules, PostData $post ): RuleMatch {
-		$playlists = [];
-		$keywords  = [];
+		$playlists   = [];
+		$keywords    = [];
+		$category    = null;
+		$bestDepth   = -1;
 
 		foreach ( $rules as $rule ) {
-			if ( ! $this->applies( $rule, $post ) ) {
+			$depth = $this->depth( $rule, $post );
+			if ( null === $depth ) {
 				continue;
+			}
+
+			// The most specific term decides the category; on a tie the first row of the table wins.
+			if ( '' !== $rule->categoryId && $depth > $bestDepth ) {
+				$category  = $rule->categoryId;
+				$bestDepth = $depth;
 			}
 
 			if ( '' !== $rule->playlistId ) {
@@ -32,23 +41,31 @@ final class RuleMatcher {
 			}
 		}
 
-		return new RuleMatch( array_values( $playlists ), array_values( $keywords ) );
+		return new RuleMatch( array_values( $playlists ), array_values( $keywords ), $category );
 	}
 
 	/**
 	 * A rule applies to a post that has its term, or, with "include sub-terms", a descendant of it.
+	 *
+	 * @return int|null The depth of the term of the rule in its hierarchy (0 for a top-level term), the greatest one
+	 *                  when the post matches in several ways, or null when the rule does not apply.
 	 */
-	private function applies( TermRule $rule, PostData $post ): bool {
+	private function depth( TermRule $rule, PostData $post ): ?int {
+		$depth = null;
+
 		foreach ( $post->termDetails[ $rule->taxonomy ] ?? [] as $term ) {
+			// The ancestors go from the parent up to the root.
 			if ( $term['slug'] === $rule->term ) {
-				return true;
+				$found = count( $term['ancestors'] );
+			} elseif ( $rule->includeChildren && false !== ( $position = array_search( $rule->term, $term['ancestors'], true ) ) ) {
+				$found = count( $term['ancestors'] ) - 1 - (int) $position;
+			} else {
+				continue;
 			}
 
-			if ( $rule->includeChildren && in_array( $rule->term, $term['ancestors'], true ) ) {
-				return true;
-			}
+			$depth = null === $depth ? $found : max( $depth, $found );
 		}
 
-		return false;
+		return $depth;
 	}
 }

@@ -59,7 +59,7 @@ final class VideoMetadataBuilder {
 			$language,
 			$license ?? $this->settings->defaultLicense(),
 			$this->settings->sendsRecordingDate() ? $this->recordingDate( $post ) : null,
-			$this->settings->categoryId(),
+			$matched->categoryId ?? $this->settings->categoryId(),
 			$this->settings->sendsThumbnail() ? $post->featuredImagePath : null,
 			$keywords['kept'],
 			$matched->playlists,

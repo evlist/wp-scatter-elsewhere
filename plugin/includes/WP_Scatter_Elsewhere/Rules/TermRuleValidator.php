@@ -45,9 +45,10 @@ final class TermRuleValidator {
 			$rule     = TermRule::fromArray( $row );
 			$playlist = trim( (string) ( $row['playlist_id'] ?? '' ) );
 			$keyword  = trim( (string) ( $row['keyword'] ?? '' ) );
+			$category = trim( (string) ( $row['category_id'] ?? '' ) );
 
 			if ( null === $rule ) {
-				if ( '' !== $playlist || '' !== $keyword ) {
+				if ( '' !== $playlist || '' !== $keyword || '' !== $category ) {
 					$errors[] = $this->message( $number, __( 'choose a term.', 'wp-scatter-elsewhere' ) );
 				}
 				continue;
@@ -60,7 +61,7 @@ final class TermRuleValidator {
 			}
 
 			$seen[ $rule->taxonomy . ':' . $rule->term ] = true;
-			$rules[]                                    = new TermRule( $rule->taxonomy, $rule->term, $rule->playlistId, $this->cleanKeyword( $rule->keyword ), $rule->includeChildren );
+			$rules[]                                    = new TermRule( $rule->taxonomy, $rule->term, $rule->playlistId, $this->cleanKeyword( $rule->keyword ), $rule->includeChildren, $rule->categoryId );
 		}
 
 		return [ 'rules' => $rules, 'errors' => $errors ];
@@ -78,8 +79,12 @@ final class TermRuleValidator {
 			return __( 'this term is already in the table.', 'wp-scatter-elsewhere' );
 		}
 
-		if ( '' === $rule->playlistId && '' === $this->cleanKeyword( $rule->keyword ) ) {
-			return __( 'give a playlist, a keyword, or both.', 'wp-scatter-elsewhere' );
+		if ( '' === $rule->playlistId && '' === $this->cleanKeyword( $rule->keyword ) && '' === $rule->categoryId ) {
+			return __( 'give a playlist, a keyword, a category, or several of them.', 'wp-scatter-elsewhere' );
+		}
+
+		if ( '' !== $rule->categoryId && 1 !== preg_match( '/^[0-9]{1,3}$/', $rule->categoryId ) ) {
+			return __( 'the category must be the number of a YouTube category, such as 22.', 'wp-scatter-elsewhere' );
 		}
 
 		if ( '' !== $rule->playlistId && 1 !== preg_match( '/^[A-Za-z0-9_-]{10,64}$/', $rule->playlistId ) ) {

@@ -38,4 +38,6 @@ settings (slice 013).
 
 ## Status
 
-- Status: planned.
+- Status: implemented. The depth of the term of the rule in its hierarchy is the specificity (the
+  term of the post itself counts as its own depth, an inherited term by its position among the
+  ancestors). The settings table has a Category column (a number, like the default category).

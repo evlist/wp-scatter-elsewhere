@@ -5,7 +5,7 @@
 namespace WP_Scatter_Elsewhere\Rules;
 
 /**
- * A rule of the table: a term, with an optional playlist and an optional keyword.
+ * A rule of the table: a term, with an optional playlist, keyword and YouTube category.
  */
 final class TermRule {
 
@@ -14,12 +14,13 @@ final class TermRule {
 		public readonly string $term,
 		public readonly string $playlistId,
 		public readonly string $keyword,
-		public readonly bool $includeChildren = false
+		public readonly bool $includeChildren = false,
+		public readonly string $categoryId = ''
 	) {
 	}
 
 	/**
-	 * @return array{taxonomy: string, term: string, playlist_id: string, keyword: string, include_children: bool}
+	 * @return array{taxonomy: string, term: string, playlist_id: string, keyword: string, include_children: bool, category_id: string}
 	 */
 	public function toArray(): array {
 		return [
@@ -28,6 +29,7 @@ final class TermRule {
 			'playlist_id'      => $this->playlistId,
 			'keyword'          => $this->keyword,
 			'include_children' => $this->includeChildren,
+			'category_id'      => $this->categoryId,
 		];
 	}
 
@@ -47,7 +49,8 @@ final class TermRule {
 			$term,
 			trim( (string) ( $data['playlist_id'] ?? '' ) ),
 			trim( (string) ( $data['keyword'] ?? '' ) ),
-			(bool) ( $data['include_children'] ?? false )
+			(bool) ( $data['include_children'] ?? false ),
+			trim( (string) ( $data['category_id'] ?? '' ) )
 		);
 	}
 }

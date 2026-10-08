@@ -80,4 +80,35 @@ class RuleMatcherTest extends TestCase {
 		$this->assertSame( [], $match->playlists );
 		$this->assertSame( [], $match->keywords );
 	}
+
+	public function test_the_category_comes_from_the_most_specific_matching_term(): void {
+		$post = $this->post( [ 'category' => [ [ 'slug' => 'randos-alpes', 'ancestors' => [ 'randos', 'voyages' ] ] ] ] );
+
+		$match = ( new RuleMatcher() )->match(
+			[
+				new TermRule( 'category', 'voyages', '', '', true, '19' ),
+				new TermRule( 'category', 'randos', '', '', true, '17' ),
+				new TermRule( 'category', 'randos-alpes', '', '', false, '27' ),
+			],
+			$post
+		);
+		$this->assertSame( '27', $match->categoryId, 'The term of the post itself is the most specific.' );
+
+		$inherited = ( new RuleMatcher() )->match(
+			[ new TermRule( 'category', 'voyages', '', '', true, '19' ), new TermRule( 'category', 'randos', '', '', true, '17' ) ],
+			$post
+		);
+		$this->assertSame( '17', $inherited->categoryId, 'A sub-term before its parent, whatever the order.' );
+	}
+
+	public function test_on_a_tie_the_first_row_gives_the_category_and_without_a_rule_there_is_none(): void {
+		$post = $this->post( [ 'category' => [ [ 'slug' => 'a', 'ancestors' => [] ], [ 'slug' => 'b', 'ancestors' => [] ] ] ] );
+
+		$tie = ( new RuleMatcher() )->match( [ new TermRule( 'category', 'b', '', '', false, '24' ), new TermRule( 'category', 'a', '', '', false, '22' ) ], $post );
+		$this->assertSame( '24', $tie->categoryId );
+
+		$none = ( new RuleMatcher() )->match( [ new TermRule( 'category', 'a', 'PLaaaaaaaaaaa', '' ) ], $post );
+		$this->assertNull( $none->categoryId );
+		$this->assertSame( [ 'PLaaaaaaaaaaa' ], $none->playlists );
+	}
 }

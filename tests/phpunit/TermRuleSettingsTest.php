@@ -40,9 +40,9 @@ class TermRuleSettingsTest extends TestCase {
 		$this->assertSame( [], $result['errors'] );
 		$this->assertSame(
 			[
-				[ 'taxonomy' => 'category', 'term' => 'vanlife', 'playlist_id' => 'PLvanlife12345', 'keyword' => 'vanlife', 'include_children' => true ],
-				[ 'taxonomy' => 'post_tag', 'term' => 'salers', 'playlist_id' => '', 'keyword' => 'Salers', 'include_children' => false ],
-				[ 'taxonomy' => 'category', 'term' => 'velo', 'playlist_id' => 'PLvelo1234567', 'keyword' => '', 'include_children' => false ],
+				[ 'taxonomy' => 'category', 'term' => 'vanlife', 'playlist_id' => 'PLvanlife12345', 'keyword' => 'vanlife', 'include_children' => true, 'category_id' => '' ],
+				[ 'taxonomy' => 'post_tag', 'term' => 'salers', 'playlist_id' => '', 'keyword' => 'Salers', 'include_children' => false, 'category_id' => '' ],
+				[ 'taxonomy' => 'category', 'term' => 'velo', 'playlist_id' => 'PLvelo1234567', 'keyword' => '', 'include_children' => false, 'category_id' => '' ],
 			],
 			array_map( static fn( $rule ): array => $rule->toArray(), $result['rules'] )
 		);
@@ -105,5 +105,20 @@ class TermRuleSettingsTest extends TestCase {
 		$this->assertSame( [], $this->settings( false )->rules() );
 		$this->assertSame( [], $this->settings( 'garbage' )->rules() );
 		$this->assertCount( 1, $this->settings( [ 'garbage', [ 'taxonomy' => 'category' ], [ 'taxonomy' => 'category', 'term' => 'velo', 'keyword' => 'velo' ] ] )->rules() );
+	}
+
+	public function test_a_category_alone_is_a_valid_rule_and_must_be_a_number(): void {
+		$ok = $this->validator()->validate( [ [ 'taxonomy' => 'category', 'term' => 'velo', 'category_id' => ' 17 ' ] ] );
+		$this->assertSame( [], $ok['errors'] );
+		$this->assertSame( '17', $ok['rules'][0]->categoryId );
+
+		$bad = $this->validator()->validate( [ [ 'taxonomy' => 'category', 'term' => 'velo', 'category_id' => 'travel' ] ] );
+		$this->assertCount( 1, $bad['errors'] );
+		$this->assertSame( [], $bad['rules'] );
+	}
+
+	public function test_rules_stored_before_the_category_existed_stay_valid(): void {
+		$rule = \WP_Scatter_Elsewhere\Rules\TermRule::fromArray( [ 'taxonomy' => 'category', 'term' => 'velo', 'playlist_id' => 'PLvelo1234567' ] );
+		$this->assertSame( '', $rule->categoryId );
 	}
 }

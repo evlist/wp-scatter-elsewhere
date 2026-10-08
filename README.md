@@ -102,7 +102,7 @@ wp scatter-elsewhere retry <job-id> [--now]
   `wp scatter-elsewhere thumbnail <post-id> [<video-id>]`. YouTube only allows custom
   thumbnails on verified channels.
 - Playlists and keywords: on the settings page, a table gives each term (category, tag,
-  ...) an optional playlist and an optional keyword, and a checkbox to apply the rule to
+  ...) an optional playlist, an optional keyword and an optional YouTube category (a number such as 19; a video has a single category, so the most specific matching term decides and the default category of the uploads applies without a rule), and a checkbox to apply the rule to
   the sub-terms too (off by default). The keywords are sent with the upload and the video
   is added to the playlists once uploaded (a problem is a warning in `jobs`). For a video
   already on YouTube: `wp scatter-elsewhere playlists-add <post-id>` and

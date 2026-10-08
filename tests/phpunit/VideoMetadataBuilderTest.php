@@ -77,6 +77,14 @@ class VideoMetadataBuilderTest extends TestCase {
 		$this->assertNull( $this->builder()->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null ) )->thumbnailSource );
 	}
 
+	public function test_the_category_comes_from_the_rules_else_from_the_settings(): void {
+		$rules   = [ [ 'taxonomy' => 'category', 'term' => 'voyages', 'playlist_id' => '', 'keyword' => '', 'category_id' => '19' ] ];
+		$details = [ 'category' => [ [ 'slug' => 'voyages', 'ancestors' => [] ] ] ];
+
+		$this->assertSame( '19', $this->builder( [ 'category_id' => '24' ], 'fr_FR', $rules )->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null, $details ) )->categoryId );
+		$this->assertSame( '24', $this->builder( [ 'category_id' => '24' ], 'fr_FR', [] )->build( $this->post( '2026-10-05 10:00:00', 'Europe/Paris', null, $details ) )->categoryId );
+	}
+
 	public function test_keywords_and_playlists_come_from_the_rules_of_the_terms_of_the_post(): void {
 		$rules   = [
 			[ 'taxonomy' => 'category', 'term' => 'vanlife', 'playlist_id' => 'PLvanlife12345', 'keyword' => 'vanlife', 'include_children' => false ],
