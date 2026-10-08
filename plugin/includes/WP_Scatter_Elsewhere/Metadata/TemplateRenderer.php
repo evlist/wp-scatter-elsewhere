@@ -24,9 +24,18 @@ final class TemplateRenderer {
 	 *                                                                    format, or with the site date
 	 *                                                                    format when given null.
 	 */
-	public function __construct( TemplateParser $parser, Closure $dateFormatter ) {
+	/**
+	 * @var Closure(): string
+	 */
+	private Closure $locale;
+
+	/**
+	 * @param Closure(): string $locale Locale of the site, such as "fr_FR", for the ordinal day.
+	 */
+	public function __construct( TemplateParser $parser, Closure $dateFormatter, ?Closure $locale = null ) {
 		$this->parser        = $parser;
 		$this->dateFormatter = $dateFormatter;
+		$this->locale        = $locale ?? static fn(): string => '';
 	}
 
 	/**
@@ -57,6 +66,8 @@ final class TemplateRenderer {
 				return $this->plainText( $post->author );
 			case 'date':
 				return ( $this->dateFormatter )( $post->date, $placeholder->argument );
+			case 'ordinal_day':
+				return OrdinalDay::format( (int) $post->date->format( 'j' ), ( $this->locale )() );
 			case 'categories':
 				return $this->terms( $post, 'category' );
 			case 'tags':

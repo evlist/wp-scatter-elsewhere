@@ -24,6 +24,7 @@ final class TemplateParser {
 		'author'     => 'none',
 		'categories' => 'none',
 		'tags'       => 'none',
+		'ordinal_day' => 'none',
 		'date'       => 'optional',
 		'terms'      => 'required',
 	];

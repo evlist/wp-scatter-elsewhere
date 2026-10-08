@@ -52,8 +52,8 @@ description so that videos are described consistently without editing each one.
 | `{categories}`, `{tags}` | Shortcuts for `{terms:category}` and `{terms:post_tag}`. |
 
 Because the post date is the event date for back-dated posts, `{date:…}` is the
-post date, not the moment of upload. A locale-aware ordinal ("1er") is a later
-slice.
+post date, not the moment of upload. The locale-aware ordinal day ("1er") is the
+`{ordinal_day}` placeholder of slice 012: `{ordinal_day} {date:F Y}` gives "1er octobre 2026".
 
 ### 3. Defaults
 

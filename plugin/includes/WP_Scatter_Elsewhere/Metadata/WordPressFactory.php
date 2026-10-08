@@ -37,7 +37,8 @@ final class WordPressFactory {
 					$format = null === $format ? (string) get_option( 'date_format' ) : $format;
 
 					return (string) wp_date( $format, $date->getTimestamp() );
-				}
+				},
+				static fn(): string => determine_locale()
 			),
 			new YouTubeTextNormalizer()
 		);

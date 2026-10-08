@@ -273,6 +273,7 @@ class SettingsPage {
 				<li><code>{title}</code> — <?php echo esc_html__( 'post title', 'wp-scatter-elsewhere' ); ?></li>
 				<li><code>{excerpt}</code> — <?php echo esc_html__( 'post excerpt', 'wp-scatter-elsewhere' ); ?></li>
 				<li><code>{permalink}</code> — <?php echo esc_html__( 'post address', 'wp-scatter-elsewhere' ); ?></li>
+				<li><code>{ordinal_day}</code> — <?php echo esc_html__( 'day of the month as written in the language of the site (1er, 1st, 2nd…), for example {ordinal_day} {date:F Y}', 'wp-scatter-elsewhere' ); ?></li>
 				<li><code>{date}</code>, <code>{date:j F Y}</code> — <?php echo esc_html__( 'post date, with an optional PHP date format', 'wp-scatter-elsewhere' ); ?></li>
 				<li><code>{author}</code> — <?php echo esc_html__( 'author name', 'wp-scatter-elsewhere' ); ?></li>
 				<li><code>{categories}</code>, <code>{tags}</code>, <code>{terms:taxonomy}</code> — <?php echo esc_html__( 'terms of the post, separated by commas', 'wp-scatter-elsewhere' ); ?></li>

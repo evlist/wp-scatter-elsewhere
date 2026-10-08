@@ -18,7 +18,7 @@ when a slice is about to start. Tentative plan for the YouTube destination (see
 9. [Subtitles](009-subtitles.md): WebVTT tracks of the page, converted to SBV, sent after an upload or on demand.
 10. [Editor panel](010-editor-panel.md): after publication, choose the video, privacy and license, and follow the upload; the same panel in the sidebar of a published post.
 11. (Merged into 010.) Sidebar button and status, to publish later or retry.
-12. Locale-aware ordinal date placeholder.
+12. Locale-aware ordinal day placeholder `{ordinal_day}` (implemented): "1er" in French, "1st"/"2nd" in English, the plain number elsewhere.
 13. Additional parameters (category, location, ...).
 
 Linking posts that were published before the plugin to the videos that are already on YouTube:

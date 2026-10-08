@@ -139,6 +139,6 @@ Consequences to handle explicitly:
 
 1. **Subtitle format:** WebVTT is what the blog serves. The plugin will check
    whether `captions.insert` accepts it directly; if not, it converts.
-2. **Ordinal dates (low priority):** a locale-aware ordinal placeholder (such as
+2. **Ordinal dates (done, slice 012 `{ordinal_day}`):** a locale-aware ordinal placeholder (such as
    "1er" in French) is wanted, after the core flow. Its design is left open
    (a `{date:…}` format extension or a dedicated placeholder).
