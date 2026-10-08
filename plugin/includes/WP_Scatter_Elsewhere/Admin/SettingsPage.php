@@ -6,6 +6,7 @@ namespace WP_Scatter_Elsewhere\Admin;
 
 use InvalidArgumentException;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use WP_Scatter_Elsewhere\Quota\QuotaMeter;
 use WP_Scatter_Elsewhere\Rules\WordPressFactory as RulesFactory;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
@@ -25,6 +26,7 @@ class SettingsPage {
 	private const ACTION_TEMPLATES  = 'wp_scatter_elsewhere_save_templates';
 	private const ACTION_UPLOAD     = 'wp_scatter_elsewhere_save_upload_settings';
 	private const ACTION_RULES      = 'wp_scatter_elsewhere_save_term_rules';
+	private const ACTION_QUOTA      = 'wp_scatter_elsewhere_save_quota';
 
 	/** Empty rows offered below the existing rules. */
 	private const BLANK_RULE_ROWS = 3;
@@ -40,6 +42,7 @@ class SettingsPage {
 		add_action( 'admin_post_' . self::ACTION_TEMPLATES, [ $this, 'handleSaveTemplates' ] );
 		add_action( 'admin_post_' . self::ACTION_UPLOAD, [ $this, 'handleSaveUploadSettings' ] );
 		add_action( 'admin_post_' . self::ACTION_RULES, [ $this, 'handleSaveRules' ] );
+		add_action( 'admin_post_' . self::ACTION_QUOTA, [ $this, 'handleSaveQuota' ] );
 		add_action( 'admin_post_' . WordPressFactory::CALLBACK_ACTION, [ $this, 'handleCallback' ] );
 	}
 
@@ -97,6 +100,20 @@ class SettingsPage {
 		}
 
 		$this->redirect( 'upload_saved' );
+	}
+
+	public function handleSaveQuota(): void {
+		$this->guard( self::ACTION_QUOTA );
+
+		$meter = WordPressFactory::quotaMeter();
+
+		if ( isset( $_POST['reset_counter'] ) ) {
+			$meter->reset();
+		} else {
+			$meter->setLimit( isset( $_POST['quota_limit'] ) ? absint( wp_unslash( $_POST['quota_limit'] ) ) : QuotaMeter::DEFAULT_LIMIT );
+		}
+
+		$this->redirect( 'quota_saved' );
 	}
 
 	public function handleSaveRules(): void {
@@ -247,8 +264,65 @@ class SettingsPage {
 
 			<?php $this->renderUploadSettings(); ?>
 
+			<?php $this->renderQuota(); ?>
+
 			<?php $this->renderRules(); ?>
 		</div>
+		<?php
+	}
+
+	private function renderQuota(): void {
+		$meter = WordPressFactory::quotaMeter();
+		$today = $meter->today();
+		$limit = $meter->limit();
+		$used  = $limit - $meter->remaining();
+		?>
+		<h3><?php echo esc_html__( 'Quota', 'wp-scatter-elsewhere' ); ?></h3>
+		<p>
+			<?php
+			echo esc_html(
+				sprintf(
+					/* translators: 1: units used today, 2: daily limit, 3: date and time of the reset. */
+					__( 'Today: about %1$d of %2$d units used. The quota is reset on %3$s.', 'wp-scatter-elsewhere' ),
+					$used,
+					$limit,
+					wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $meter->nextReset() )
+				)
+			);
+			?>
+		</p>
+		<progress max="<?php echo esc_attr( (string) $limit ); ?>" value="<?php echo esc_attr( (string) min( $used, $limit ) ); ?>" style="width:20em"></progress>
+		<?php if ( [] !== $today['by'] ) : ?>
+			<ul>
+				<?php foreach ( $today['by'] as $method => $units ) : ?>
+					<li><code><?php echo esc_html( (string) $method ); ?></code>: <?php echo esc_html( (string) $units ); ?></li>
+				<?php endforeach; ?>
+			</ul>
+		<?php endif; ?>
+		<?php $history = array_slice( $meter->history(), 0, 7, true ); ?>
+		<?php if ( count( $history ) > 1 ) : ?>
+			<p class="description">
+				<?php
+				echo esc_html(
+					implode(
+						', ',
+						array_map( static fn( string $date, int $units ): string => $date . ': ' . $units, array_keys( $history ), $history )
+					)
+				);
+				?>
+			</p>
+		<?php endif; ?>
+		<p class="description"><?php echo esc_html__( 'This is an estimate made from the requests of this plugin. Other tools that use the same Google Cloud project are not counted; the exact figure is in the quota page of the Google Cloud Console. The day starts at midnight Pacific Time.', 'wp-scatter-elsewhere' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_QUOTA ); ?>" />
+			<?php wp_nonce_field( self::ACTION_QUOTA ); ?>
+			<p>
+				<label for="wpse-quota-limit"><?php echo esc_html__( 'Daily limit', 'wp-scatter-elsewhere' ); ?></label>
+				<input type="number" min="1" id="wpse-quota-limit" name="quota_limit" class="small-text" value="<?php echo esc_attr( (string) $limit ); ?>" />
+				<?php submit_button( __( 'Save the limit', 'wp-scatter-elsewhere' ), 'secondary', 'save_limit', false ); ?>
+				<?php submit_button( __( 'Reset the counter', 'wp-scatter-elsewhere' ), 'secondary', 'reset_counter', false ); ?>
+			</p>
+		</form>
 		<?php
 	}
 
@@ -507,6 +581,7 @@ class SettingsPage {
 			'disconnected' => __( 'Disconnected from YouTube.', 'wp-scatter-elsewhere' ),
 			'templates_saved' => __( 'Templates saved.', 'wp-scatter-elsewhere' ),
 			'upload_saved'    => __( 'Upload settings saved.', 'wp-scatter-elsewhere' ),
+			'quota_saved'     => __( 'Quota settings saved.', 'wp-scatter-elsewhere' ),
 			'rules_saved'     => __( 'Rules saved.', 'wp-scatter-elsewhere' ),
 		];
 

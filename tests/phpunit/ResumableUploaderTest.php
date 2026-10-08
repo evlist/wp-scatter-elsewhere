@@ -112,6 +112,8 @@ class ResumableUploaderTest extends TestCase {
 		);
 	}
 
+	private ?Closure $quotaReset = null;
+
 	private function uploader( array $settings = [ 'refresh_token' => 'r', 'status' => 'connected' ], ?Closure $reader = null ): ResumableUploader {
 		$this->server ??= new FakeUploadServer( strlen( self::CONTENT ) );
 		$server        = $this->server;
@@ -135,7 +137,8 @@ class ResumableUploaderTest extends TestCase {
 			$tokens,
 			$reader ?? static fn( string $path, int $offset, int $length ): string => substr( self::CONTENT, $offset, $length ),
 			fn(): int => $server->now,
-			10
+			10,
+			$this->quotaReset
 		);
 	}
 
@@ -303,6 +306,22 @@ class ResumableUploaderTest extends TestCase {
 
 		$this->server->script = [ [ 'status' => 400, 'headers' => [], 'body' => '{}' ] ];
 		$this->assertSame( UploadJob::STATUS_FAILED, $this->uploader()->run( $this->job(), 600 )->status() );
+	}
+
+	public function test_an_exhausted_daily_quota_makes_the_job_wait_for_the_reset_without_counting_an_attempt(): void {
+		$this->quotaReset     = static fn(): int => 5000;
+		$this->server->script = [ [ 'status' => 403, 'headers' => [], 'body' => (string) json_encode( [ 'error' => [ 'errors' => [ [ 'reason' => 'quotaExceeded' ] ] ] ] ) ] ];
+
+		$job = $this->uploader()->run( $this->job( [ 'attempts' => 3 ] ), 600 );
+
+		$this->assertSame( UploadJob::STATUS_RETRY, $job->status() );
+		$this->assertSame( 5060, $job->retryAt() );
+		$this->assertSame( 3, $job->attempts() );
+		$this->assertStringContainsString( 'quota', (string) $job->error() );
+
+		$this->server->script = [ [ 'status' => 403, 'headers' => [], 'body' => (string) json_encode( [ 'error' => [ 'errors' => [ [ 'reason' => 'rateLimitExceeded' ] ] ] ] ) ] ];
+		$job = $this->uploader()->run( $this->job( [ 'attempts' => 3 ] ), 600 );
+		$this->assertSame( 4, $job->attempts(), 'A short-term rate limit is an ordinary retry.' );
 	}
 
 	public function test_an_expired_session_restarts_the_upload(): void {

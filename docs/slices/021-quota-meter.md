@@ -118,3 +118,15 @@ time of the reset.
 
 1. The costs of the table are the documented ones at the time of writing; they should be checked
    against the Cloud Console after the first real days and corrected if they differ.
+
+## Status
+
+- Status: implemented for the counting (`Quota/`, `YouTube/MeteredHttp`, wired in
+  `uploadHttp()`), the settings section (used, limit, breakdown, history, next reset, limit and
+  reset form), the notice of the editor panel (state and polling carry `quota`), the
+  `quota [--reset]` command and the upload jobs, which wait for the reset (status retry, no
+  attempt counted) when YouTube says `quotaExceeded` or `dailyLimitExceeded`.
+- The `--quota-limit` default of the batch commands and the notice in the pages of slices 019 and
+  020 come with those slices, which read `YouTube\WordPressFactory::quotaMeter()`.
+- The token and channel requests made before the connection is complete (OAuth, one `channels.list`
+  at connection time) do not go through the counted HTTP layer; they cost a unit or none.

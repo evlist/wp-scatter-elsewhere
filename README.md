@@ -122,6 +122,15 @@ wp scatter-elsewhere retry <job-id> [--now]
 - An upload is the most expensive YouTube API call. With the default daily quota
   of a Google Cloud project, only a few uploads fit in a day, tests included.
 
+## Quota
+
+YouTube gives 10,000 units a day (an upload costs about 1,600). The plugin counts the units it
+spends and shows an estimate in the settings (**Quota**), in the YouTube panel of the editor (a
+notice when 80 % is used or fewer than an upload costs is left, and when it is exhausted) and with
+`wp scatter-elsewhere quota`. The YouTube API cannot say the real figure, so other tools using the
+same Google Cloud project are not counted; the day starts at midnight Pacific Time. An upload that
+meets the daily limit waits for the reset instead of failing.
+
 ## Requirements
 
 - WordPress 6.x or later.

@@ -153,6 +153,7 @@ final class YouTubeController {
 			'error'        => null,
 			'videos'       => [],
 			'defaults'     => [ 'privacy' => 'private', 'license' => 'youtube' ],
+			'quota'        => $this->quota(),
 		];
 
 		if ( ! $base['connected'] || ! $base['published'] ) {
@@ -191,6 +192,7 @@ final class YouTubeController {
 		return new WP_REST_Response(
 			[
 				'videos' => ( new PostYouTubeState() )->statuses( $this->publications( $service, $postId, array_keys( $jobs ) ), $jobs ),
+				'quota'  => $this->quota(),
 			]
 		);
 	}
@@ -421,6 +423,23 @@ final class YouTubeController {
 		}
 
 		return new WP_REST_Response( [ 'videos' => $videos, 'total' => $result['total'], 'fetched_at' => $result['fetched_at'] ] );
+	}
+
+	/**
+	 * The state of the daily quota, an estimate, for the notice of the panel.
+	 *
+	 * @return array{used: int, limit: int, remaining: int, level: string, resets_at: int}
+	 */
+	private function quota(): array {
+		$meter = WordPressFactory::quotaMeter();
+
+		return [
+			'used'      => $meter->limit() - $meter->remaining(),
+			'limit'     => $meter->limit(),
+			'remaining' => $meter->remaining(),
+			'level'     => $meter->level(),
+			'resets_at' => $meter->nextReset(),
+		];
 	}
 
 	/**

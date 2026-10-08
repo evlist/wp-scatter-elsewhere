@@ -261,6 +261,9 @@
 				apiFetch( { path: NAMESPACE + '/post/' + postId + '/youtube/jobs' } )
 					.then( ( response ) => {
 						mergeStatuses( response.videos );
+						if ( response.quota && store.state.data ) {
+							setState( { data: Object.assign( {}, store.state.data, { quota: response.quota } ) } );
+						}
 						syncPolling( postId );
 					} )
 					.catch( () => {} );
@@ -620,6 +623,30 @@
 					__nextHasNoMarginBottom: true,
 				} ),
 				el( 'div', { key: 'spacer', style: { height: '12px' } } )
+			);
+		}
+
+		const quota = data.quota;
+		if ( quota && 'ok' !== quota.level ) {
+			const resetAt = new Date( quota.resets_at * 1000 ).toLocaleString();
+
+			children.push(
+				el(
+					Notice,
+					{ key: 'quota', status: 'exhausted' === quota.level ? 'error' : 'warning', isDismissible: false },
+					'exhausted' === quota.level
+						? sprintf(
+							/* translators: %s: date and time. */
+							__( 'The daily YouTube quota is exhausted. It is reset on %s.', 'wp-scatter-elsewhere' ),
+							resetAt
+						)
+						: sprintf(
+							/* translators: 1: number of units left, 2: date and time. */
+							__( 'About %1$d units of the daily YouTube quota are left (estimate); a new upload needs about 1,600. The quota is reset on %2$s.', 'wp-scatter-elsewhere' ),
+							quota.remaining,
+							resetAt
+						)
+				)
 			);
 		}
 

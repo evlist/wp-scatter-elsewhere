@@ -798,6 +798,50 @@ final class Command {
 	}
 
 	/**
+	 * Shows the YouTube quota used today, estimated from the requests of this plugin.
+	 *
+	 * Other tools that use the same Google Cloud project are not counted. The day starts at midnight Pacific Time.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--reset]
+	 * : Reset the counter of the plugin.
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function quota( array $args, array $assoc ): void {
+		$meter = WordPressFactory::quotaMeter();
+
+		if ( ! empty( $assoc['reset'] ) ) {
+			$meter->reset();
+			WP_CLI::success( __( 'The counter was reset.', 'wp-scatter-elsewhere' ) );
+		}
+
+		$today = $meter->today();
+		$rows  = [];
+		foreach ( $today['by'] as $method => $units ) {
+			$rows[] = [ 'method' => $method, 'units' => $units ];
+		}
+
+		if ( [] !== $rows ) {
+			\WP_CLI\Utils\format_items( 'table', $rows, [ 'method', 'units' ] );
+		}
+
+		WP_CLI::log(
+			sprintf(
+				/* translators: 1: units used, 2: daily limit, 3: units left, 4: level (ok, low or exhausted), 5: date and time of the reset. */
+				__( 'Used %1$d of %2$d units (%3$d left, %4$s). Reset: %5$s.', 'wp-scatter-elsewhere' ),
+				$meter->limit() - $meter->remaining(),
+				$meter->limit(),
+				$meter->remaining(),
+				$meter->level(),
+				wp_date( 'Y-m-d H:i', $meter->nextReset() )
+			)
+		);
+	}
+
+	/**
 	 * Lists the uploads and their state.
 	 */
 	public function jobs(): void {

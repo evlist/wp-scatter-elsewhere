@@ -52,18 +52,26 @@ final class ResumableUploader {
 	private int $chunkSize;
 
 	/**
+	 * @var (Closure(): int)|null
+	 */
+	private ?Closure $quotaReset;
+
+	/**
 	 * @param Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string} $http
 	 *        Receives the method, URL, headers and raw body; returns the status, the lower-cased response headers
 	 *        and the body; throws RuntimeException on transport errors.
 	 * @param Closure(string, int, int): (string|false) $reader Reads $length bytes of a file from $offset.
 	 * @param Closure(): int                            $clock  Current Unix time.
+	 * @param (Closure(): int)|null                     $quotaReset Unix time at which the daily quota is reset; when given, an exhausted
+	 *                                                      daily quota makes the job wait for it instead of counting an attempt.
 	 */
-	public function __construct( Closure $http, AccessTokenProvider $tokens, Closure $reader, Closure $clock, int $chunkSize = self::DEFAULT_CHUNK_SIZE ) {
+	public function __construct( Closure $http, AccessTokenProvider $tokens, Closure $reader, Closure $clock, int $chunkSize = self::DEFAULT_CHUNK_SIZE, ?Closure $quotaReset = null ) {
 		$this->http      = $http;
 		$this->tokens    = $tokens;
 		$this->reader    = $reader;
 		$this->clock     = $clock;
-		$this->chunkSize = $chunkSize;
+		$this->chunkSize  = $chunkSize;
+		$this->quotaReset = $quotaReset;
 	}
 
 	public function run( UploadJob $job, int $budgetSeconds ): UploadJob {
@@ -251,6 +259,16 @@ final class ResumableUploader {
 		}
 
 		$error = $this->describeError( $response );
+
+		if ( null !== $this->quotaReset && 403 === $status && in_array( $this->errorReason( $response['body'] ), [ 'quotaExceeded', 'dailyLimitExceeded' ], true ) ) {
+			return $job->with(
+				[
+					'status'   => UploadJob::STATUS_RETRY,
+					'retry_at' => ( $this->quotaReset )() + 60,
+					'error'    => __( 'The daily YouTube quota is exhausted: the upload waits for the reset of the quota.', 'wp-scatter-elsewhere' ),
+				]
+			);
+		}
 
 		if ( 0 === $status || $status >= 500 || 429 === $status || 401 === $status || $this->isQuotaError( $response ) ) {
 			return $this->retryLater( $job, $error );

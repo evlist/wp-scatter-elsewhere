@@ -7,6 +7,7 @@ namespace WP_Scatter_Elsewhere\YouTube;
 use RuntimeException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Playlists\PlaylistService;
+use WP_Scatter_Elsewhere\Quota\QuotaMeter;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
 use WP_Scatter_Elsewhere\Settings\YouTubeSettings;
 use WP_Scatter_Elsewhere\Subtitles\SubtitleConverter;
@@ -24,6 +25,7 @@ final class WordPressFactory {
 	public const CALLBACK_ACTION = 'wp_scatter_elsewhere_youtube_callback';
 	public const UPLOAD_HOOK     = 'wp_scatter_elsewhere_process_upload';
 
+	private const QUOTA_OPTION = 'wp_scatter_elsewhere_quota';
 	private const TOKEN_TRANSIENT = 'wp_scatter_elsewhere_youtube_access_token';
 	private const STATE_TRANSIENT = 'wp_scatter_elsewhere_oauth_state_';
 
@@ -126,7 +128,9 @@ final class WordPressFactory {
 
 					return $data;
 				},
-				static fn(): int => time()
+				static fn(): int => time(),
+				ResumableUploader::DEFAULT_CHUNK_SIZE,
+				static fn(): int => self::quotaMeter()->nextReset()
 			),
 			self::uploadSettings(),
 			PublicationFactory::store(),
@@ -181,6 +185,23 @@ final class WordPressFactory {
 	 * @return \Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string}
 	 */
 	public static function uploadHttp(): \Closure {
+		return MeteredHttp::wrap( self::rawHttp(), self::quotaMeter() );
+	}
+
+	public static function quotaMeter(): QuotaMeter {
+		return new QuotaMeter(
+			static fn(): mixed => get_option( self::QUOTA_OPTION, false ),
+			static function ( array $value ): void {
+				update_option( self::QUOTA_OPTION, $value, false );
+			},
+			static fn(): int => time()
+		);
+	}
+
+	/**
+	 * @return \Closure(string, string, array<string, string>, string): array{status: int, headers: array<string, string>, body: string}
+	 */
+	private static function rawHttp(): \Closure {
 		return static function ( string $method, string $url, array $headers, string $body ): array {
 			$response = wp_remote_request(
 				$url,
