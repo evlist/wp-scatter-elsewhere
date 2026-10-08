@@ -90,3 +90,10 @@ in one operation, after checking the proposed matches.
 
 - Once linked, the old videos can be completed with the existing commands: for example the
   subtitles, the thumbnail and the playlists of the rules, which the old workflow set by hand.
+
+## Status
+
+- Status: implemented. `Matching/BulkLinker` (with `BulkEntry` and `BulkDecision`) is pure and
+  tested; the command in `Cli/Command.php` examines the published posts whose content mentions
+  "video" (to avoid fetching pages without any), oldest first, pauses 500 ms between posts
+  (`--pause`), and refuses to run when the channel cannot be read (not connected).

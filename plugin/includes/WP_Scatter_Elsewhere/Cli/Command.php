@@ -10,6 +10,12 @@ use WP_Scatter_Elsewhere\Detection\DetectionException;
 use WP_Scatter_Elsewhere\Detection\WordPressDetectorFactory;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
 use InvalidArgumentException;
+use WP_Scatter_Elsewhere\Matching\BulkDecision;
+use WP_Scatter_Elsewhere\Matching\BulkEntry;
+use WP_Scatter_Elsewhere\Matching\BulkLinker;
+use WP_Scatter_Elsewhere\Matching\Suggestion;
+use WP_Scatter_Elsewhere\Matching\VideoMatcher;
+use WP_Scatter_Elsewhere\Matching\WordPressFactory as MatchingFactory;
 use WP_Scatter_Elsewhere\Publication\LinkException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Thumbnails\WordPressFactory as ThumbnailFactory;
@@ -288,6 +294,194 @@ final class Command {
 		}
 
 		\WP_CLI\Utils\format_items( 'table', $rows, [ 'youtube_id', 'confidence', 'privacy', 'title', 'reason' ] );
+	}
+
+	/**
+	 * Links the old posts to the videos that are already on the channel, after a report.
+	 *
+	 * Without --apply nothing is recorded. The channel is read once; the page of each post that holds a
+	 * video markup is fetched from the site (no quota) to find its videos. A YouTube video wanted by
+	 * several videos of the blog is never linked automatically.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--post=<ids>]
+	 * : Comma-separated post IDs to examine.
+	 *
+	 * [--since=<date>]
+	 * : Only the posts dated on or after this date (YYYY-MM-DD).
+	 *
+	 * [--limit=<n>]
+	 * : Examine at most this number of posts that hold a video, oldest first.
+	 *
+	 * [--min-confidence=<level>]
+	 * : Confidence needed to link with --apply.
+	 * ---
+	 * default: high
+	 * options:
+	 *   - high
+	 *   - suggestion
+	 * ---
+	 *
+	 * [--pause=<ms>]
+	 * : Pause between two posts, in milliseconds.
+	 * ---
+	 * default: 500
+	 * ---
+	 *
+	 * [--apply]
+	 * : Link the matches that reach the confidence. Without it, only report.
+	 *
+	 * [--format=<format>]
+	 * : Format of the report.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - csv
+	 *   - json
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp scatter-elsewhere link-existing --since=2020-01-01 --limit=20
+	 *     wp scatter-elsewhere link-existing --since=2020-01-01 --limit=20 --apply
+	 *
+	 * @subcommand link-existing
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function link_existing( array $args, array $assoc ): void {
+		$min   = (string) ( $assoc['min-confidence'] ?? 'high' );
+		$apply = ! empty( $assoc['apply'] );
+		$pause = max( 0, (int) ( $assoc['pause'] ?? 500 ) );
+
+		if ( ! in_array( $min, [ Suggestion::HIGH, Suggestion::SUGGESTION ], true ) ) {
+			WP_CLI::error( __( 'The minimum confidence must be high or suggestion.', 'wp-scatter-elsewhere' ) );
+		}
+
+		try {
+			$catalog = PublicationFactory::channelCatalog()->list( false, '', true );
+		} catch ( YouTubeConnectionException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+		$videos = array_map( static fn( array $row ) => $row['video'], $catalog['videos'] );
+
+		$uploads = WordPressFactory::uploadService();
+		$entries = [];
+		$errors  = [];
+		$posts   = $this->postsToExamine( $assoc );
+
+		foreach ( $posts as $number => $postId ) {
+			if ( $number > 0 && $pause > 0 ) {
+				usleep( $pause * 1000 );
+			}
+
+			$facts = MatchingFactory::postFacts( $postId );
+			if ( null === $facts ) {
+				continue;
+			}
+
+			try {
+				$detected = WordPressDetectorFactory::create()->detect( $postId );
+			} catch ( DetectionException $e ) {
+				$errors[] = [ 'post' => $postId, 'video' => '', 'youtube' => '', 'confidence' => '', 'reasons' => '', 'decision' => 'page unreadable', 'note' => $e->getMessage() ];
+				continue;
+			}
+
+			foreach ( $detected as $video ) {
+				$entries[] = new BulkEntry( $postId, $video->id, $facts, null !== $uploads->publicationFor( $postId, $video->id ) );
+			}
+		}
+
+		$decisions = ( new BulkLinker( new VideoMatcher() ) )->plan( $entries, $videos, $min );
+		$rows      = $errors;
+		$linked    = [];
+
+		foreach ( $decisions as $decision ) {
+			$note = $decision->note;
+
+			if ( $apply && BulkDecision::WOULD_LINK === $decision->decision && null !== $decision->suggestion ) {
+				try {
+					PublicationFactory::linkService()->link( $decision->entry->postId, $decision->entry->videoId, $decision->suggestion->video->id );
+					$linked[] = $decision;
+					$status   = 'linked';
+				} catch ( LinkException $e ) {
+					$status = BulkDecision::NEEDS_DECISION;
+					$note   = $e->getMessage();
+				}
+			} else {
+				$status = $decision->decision;
+			}
+
+			$rows[] = [
+				'post'       => $decision->entry->postId,
+				'video'      => $decision->entry->videoId,
+				'youtube'    => null === $decision->suggestion ? '' : $decision->suggestion->video->id . ' ' . $decision->suggestion->video->title,
+				'confidence' => null === $decision->suggestion ? '' : $decision->suggestion->confidence,
+				'reasons'    => null === $decision->suggestion ? '' : implode( ', ', array_map( [ MatchingFactory::class, 'reasonLabel' ], $decision->suggestion->reasons ) ),
+				'decision'   => $status,
+				'note'       => $note,
+			];
+		}
+
+		\WP_CLI\Utils\format_items( (string) ( $assoc['format'] ?? 'table' ), $rows, [ 'post', 'video', 'youtube', 'confidence', 'reasons', 'decision', 'note' ] );
+
+		foreach ( $linked as $decision ) {
+			/* translators: 1: post ID, 2: video ID, 3: YouTube video ID, 4: command that undoes the link. */
+			WP_CLI::log( sprintf( __( 'Linked post %1$d video %2$s to %3$s. To undo: %4$s', 'wp-scatter-elsewhere' ), $decision->entry->postId, $decision->entry->videoId, $decision->suggestion->video->id, 'wp scatter-elsewhere unlink ' . $decision->entry->postId . ' ' . $decision->entry->videoId ) );
+		}
+
+		$would = count( array_filter( $decisions, static fn( BulkDecision $d ): bool => BulkDecision::WOULD_LINK === $d->decision ) );
+		WP_CLI::success(
+			$apply
+				/* translators: %d: number of links recorded. */
+				? sprintf( __( '%d video(s) linked.', 'wp-scatter-elsewhere' ), count( $linked ) )
+				/* translators: %d: number of links that --apply would record. */
+				: sprintf( __( 'Nothing was recorded: %d video(s) would be linked with --apply.', 'wp-scatter-elsewhere' ), $would )
+		);
+	}
+
+	/**
+	 * The published posts to examine, oldest first: those whose content mentions a video.
+	 *
+	 * @param array<string, mixed> $assoc
+	 * @return int[]
+	 */
+	private function postsToExamine( array $assoc ): array {
+		$query = [
+			'post_type'      => 'any',
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'orderby'        => 'date',
+			'order'          => 'ASC',
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
+		];
+
+		if ( ! empty( $assoc['post'] ) ) {
+			$query['post__in'] = array_map( 'intval', explode( ',', (string) $assoc['post'] ) );
+		}
+
+		if ( ! empty( $assoc['since'] ) ) {
+			$query['date_query'] = [ [ 'after' => (string) $assoc['since'], 'inclusive' => true ] ];
+		}
+
+		$limit = isset( $assoc['limit'] ) ? max( 1, (int) $assoc['limit'] ) : PHP_INT_MAX;
+		$ids   = [];
+
+		foreach ( get_posts( $query ) as $postId ) {
+			if ( false !== stripos( (string) get_post_field( 'post_content', (int) $postId ), 'video' ) ) {
+				$ids[] = (int) $postId;
+			}
+
+			if ( count( $ids ) >= $limit ) {
+				break;
+			}
+		}
+
+		return $ids;
 	}
 
 	/**

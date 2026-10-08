@@ -62,6 +62,12 @@ the list, then **Choose** goes through the usual confirmation. The list is kept 
 address of the post found in the description, the same title, or a similar title with a close
 date (a video already linked elsewhere is never proposed). Nothing is linked before you confirm.
 `wp scatter-elsewhere suggest <post-id>` prints the same candidates.
+To link many old posts at once, `wp scatter-elsewhere link-existing [--post=<ids>] [--since=<date>]
+[--limit=<n>] [--min-confidence=high|suggestion] [--pause=<ms>] [--format=<format>]` reads the channel
+once, fetches the page of each post that mentions a video, and **only reports** the matches. Add
+`--apply` to link those that reach the confidence (high by default, with the checks of the editor
+link). A YouTube video wanted by several videos of the blog is never linked automatically, and the
+report ends with the `unlink` command of everything that was linked.
 From WP-CLI: `wp scatter-elsewhere channel-videos [--search=<words>] [--unlinked] [--limit=<n>] [--refresh]`.
 
 ## Uploading a video
