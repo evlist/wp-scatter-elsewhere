@@ -50,15 +50,14 @@ from a page, to review the differences before, and to follow the work.
 **Preview** reads the current state of the videos (1 quota unit each, in steps with a progress
 bar, like the scan of slice 019) and shows a table: video, field, current value, new value,
 action. Videos without any difference are counted, not listed. The preview shows the estimated
-quota of the run and the quota already spent today when known (the plugin counts its own
-requests in a daily counter, to warn before the 10,000 units are reached).
+quota of the run and the quota already spent today when known (from the meter of slice 021, to warn before the daily limit is reached).
 
 ### 3. The run
 
 **Apply** creates a *batch job* with the preview as its plan and schedules it. The job:
 
 - is processed by WP-Cron in steps of about 20 seconds (as the uploads), one video at a time,
-  with a lock, backoff on quota or transient errors, and a pause when the daily quota is
+  with a lock, backoff on quota or transient errors, and a pause when the meter of slice 021 says the daily quota is
   exhausted (it resumes the next day, with a message);
 - is shown by the page with a progress bar, counts (updated, unchanged, errors), the last
   messages, **Stop** and **Resume**;
@@ -100,6 +99,7 @@ the log. A job started from the command line (slice 018) is not recorded here.
 
 ## Open questions
 
-1. Whether the preview should be stored with the job (consistent but possibly stale) or the job
-   recomputes the differences at each step (always current, one more read per video). The
-   second is proposed: reading costs 1 unit and the video may have been edited meanwhile.
+1. (Decided.) The job recomputes the differences at each step instead of freezing the preview:
+   always current, one more read per video (1 unit), and a video edited meanwhile on YouTube is not
+   overwritten with stale values. The preview is therefore only an announcement of what the run
+   is expected to do.

@@ -57,7 +57,7 @@ guess), and `all-safe` stands for every field except `title`, `description` and 
 | `language` | The language of the settings or of the site. |
 | `license` | The default license of the settings. |
 | `recording_date` | The date of the post. |
-| `category` | The category of the settings (a single value: it is replaced). |
+| `category` | The category given by the rules (slice 022) or else by the settings; a single value, so it is replaced. |
 | `embeddable`, `public_stats`, `made_for_kids` | The options of the settings. |
 | `keywords` | The keywords given by the rules for the terms of the post. |
 | `playlists` | The playlists given by the rules for the terms of the post. |
@@ -91,8 +91,9 @@ removal, about 400 per captions insert).
 
 ### 5. Safety, resuming and cost
 
-- `--quota-limit` stops the run before the estimate of the next video would exceed it (the
-  default daily quota of YouTube is 10,000 units). The run is **idempotent**: a second run finds
+- `--quota-limit` stops the run before the estimate of the next video would exceed it. It
+  defaults to the quota remaining according to the meter of slice 021 (10,000 units a day
+  unless configured). The run is **idempotent**: a second run finds
   nothing left to change for the videos done and goes on with the others, so there is no
   separate state to keep.
 - A video that cannot be updated (deleted on YouTube, authorisation) is reported and the run
@@ -142,5 +143,5 @@ The same classes serve the administration page of slice 020.
 
 1. Should `sync` of playlists also be offered for the playlists given by the *default* (a future
    "always add to playlist X" setting)? Not needed for now: the rules are the only source.
-2. Should the category become a rule output (a category per term, like the playlists)? It is a
-   natural follow-up: single-valued, so the first matching rule would win.
+2. (Decided.) The category becomes a rule output, see slice 022; this command compares and
+   replaces it.
