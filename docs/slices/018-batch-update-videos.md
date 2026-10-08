@@ -145,3 +145,18 @@ The same classes serve the administration page of slice 020.
    "always add to playlist X" setting)? Not needed for now: the rules are the only source.
 2. (Decided.) The category becomes a rule output, see slice 022; this command compares and
    replaces it.
+
+## Status
+
+- Status: implemented. The classes are in `Update/`: `VideoDiff` (single-valued fields and keywords,
+  with `add` and `sync`), `ManagedSets` (playlists and keywords named by the rules), `BatchUpdater`
+  (reads, diffs, applies, playlist add and removal, thumbnail and subtitle actions, cost) and
+  `VideoReport`; `VideoUpdater` gained the category, the options, the privacy, `keywords_remove` and
+  `snapshot()`, and `PlaylistClient` gained `itemIds()` and `remove()`.
+- Differences with the plan: the report lists one row per difference (videos that match are only
+  counted); `--quota-limit` applies with `--apply`, using the worst case of a video (about 52 units,
+  plus 51 per playlist looked at, 50 for a thumbnail, 400 for subtitles) so that the run stops
+  between two videos; the exit status is 1 when a video could not be updated and 2 when the run
+  stopped for lack of quota.
+- The thumbnail and the subtitles cannot be compared with what YouTube holds: with `--apply` they
+  are sent again, without it the report says "would send".

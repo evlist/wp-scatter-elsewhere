@@ -122,6 +122,20 @@ wp scatter-elsewhere retry <job-id> [--now]
 - An upload is the most expensive YouTube API call. With the default daily quota
   of a Google Cloud project, only a few uploads fit in a day, tests included.
 
+## Updating many videos
+
+After a change of the settings or of the rules, `wp scatter-elsewhere update-videos --fields=<list>`
+compares the videos linked to posts with what the posts give now and **only reports** the differences
+(old value, new value, quota that applying would use); add `--apply` to send them. `--fields` is
+required and chooses what is looked at (`title`, `description`, `language`, `license`,
+`recording_date`, `category`, `embeddable`, `public_stats`, `made_for_kids`, `keywords`, `playlists`,
+`thumbnail`, `subtitles`, `privacy` with `--privacy=<value>`, or `all-safe` for all but title,
+description and privacy). `--playlists=sync` and `--keywords=sync` also remove what the rules no
+longer give, but only the playlists and keywords that a rule names: anything added by hand is kept;
+the default `add` never removes. `--post`, `--since`, `--until`, `--term=taxonomy:slug` and `--limit`
+choose the videos, and `--quota-limit` (by default the quota left today) stops the run between two
+videos; running the command again continues, since videos that match are left alone.
+
 ## Quota
 
 YouTube gives 10,000 units a day (an upload costs about 1,600). The plugin counts the units it

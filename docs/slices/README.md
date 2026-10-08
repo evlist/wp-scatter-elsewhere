@@ -30,7 +30,7 @@ Linking posts that were published before the plugin to the videos that are alrea
 
 Updating and administration pages:
 
-18. [Update many videos at once](018-batch-update-videos.md): a WP-CLI command that applies the current settings and rules to the linked videos, field by field, with add or add-and-remove for playlists and keywords (planned).
+18. [Update many videos at once](018-batch-update-videos.md): a WP-CLI command that applies the current settings and rules to the linked videos, field by field, with add or add-and-remove for playlists and keywords (implemented).
 19. [Administration page: link the old posts](019-link-tools-page.md): the bulk linking of 017 in Tools, with a review table and undo (planned).
 20. [Administration page: update the videos](020-update-tools-page.md): the bulk update of 018 in Tools, with preview and a background run (planned).
 21. [Quota meter](021-quota-meter.md): the plugin counts the YouTube quota it spends and shows it in the settings, warns in the panels and limits the batch operations (counting, settings, panel notice and command implemented).
