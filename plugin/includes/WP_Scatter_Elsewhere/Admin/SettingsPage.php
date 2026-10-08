@@ -87,10 +87,11 @@ class SettingsPage {
 		$privacy  = isset( $_POST['default_privacy'] ) ? sanitize_key( wp_unslash( $_POST['default_privacy'] ) ) : '';
 		$license  = isset( $_POST['default_license'] ) ? sanitize_text_field( wp_unslash( $_POST['default_license'] ) ) : '';
 		$language = isset( $_POST['language'] ) ? sanitize_text_field( wp_unslash( $_POST['language'] ) ) : '';
+		$category = isset( $_POST['category_id'] ) ? sanitize_text_field( wp_unslash( $_POST['category_id'] ) ) : '';
 		$subtitleFormat = isset( $_POST['subtitle_format'] ) ? sanitize_key( wp_unslash( $_POST['subtitle_format'] ) ) : '';
 
 		try {
-			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat, isset( $_POST['remove_auto_captions'] ), isset( $_POST['send_thumbnail'] ) );
+			WordPressFactory::uploadSettings()->save( $privacy, $license, $language, isset( $_POST['send_recording_date'] ), $subtitleFormat, isset( $_POST['remove_auto_captions'] ), isset( $_POST['send_thumbnail'] ), $category, isset( $_POST['embeddable'] ), isset( $_POST['public_stats_viewable'] ), isset( $_POST['made_for_kids'] ), isset( $_POST['notify_subscribers'] ) );
 		} catch ( InvalidArgumentException $e ) {
 			$this->redirectWithError( $e->getMessage() );
 		}
@@ -411,6 +412,22 @@ class SettingsPage {
 					<td>
 						<input type="text" id="wpse-language" name="language" class="small-text code" value="<?php echo esc_attr( $settings->language() ); ?>" />
 						<p class="description"><?php echo esc_html__( 'A language code such as fr, en or pt-BR. Leave empty to use the language of the site.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-category"><?php echo esc_html__( 'Category', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<input type="text" id="wpse-category" name="category_id" class="small-text code" value="<?php echo esc_attr( $settings->categoryId() ); ?>" />
+						<p class="description"><?php echo esc_html__( 'Number of the YouTube category: 22 People & Blogs, 19 Travel & Events, 24 Entertainment, 27 Education, 28 Science & Technology, 17 Sports, 2 Autos & Vehicles.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php echo esc_html__( 'Options', 'wp-scatter-elsewhere' ); ?></th>
+					<td>
+						<label><input type="checkbox" name="embeddable" value="1" <?php checked( $settings->isEmbeddable() ); ?> /> <?php echo esc_html__( 'Allow the video to be embedded in other sites', 'wp-scatter-elsewhere' ); ?></label><br />
+						<label><input type="checkbox" name="public_stats_viewable" value="1" <?php checked( $settings->publicStatsViewable() ); ?> /> <?php echo esc_html__( 'Show the statistics of the video publicly', 'wp-scatter-elsewhere' ); ?></label><br />
+						<label><input type="checkbox" name="made_for_kids" value="1" <?php checked( $settings->madeForKids() ); ?> /> <?php echo esc_html__( 'Declare the videos as made for kids', 'wp-scatter-elsewhere' ); ?></label><br />
+						<label><input type="checkbox" name="notify_subscribers" value="1" <?php checked( $settings->notifiesSubscribers() ); ?> /> <?php echo esc_html__( 'Notify the subscribers of the channel when a video is public', 'wp-scatter-elsewhere' ); ?></label>
 					</td>
 				</tr>
 				<tr>

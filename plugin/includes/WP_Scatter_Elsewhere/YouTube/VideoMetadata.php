@@ -30,7 +30,11 @@ final class VideoMetadata {
 		public readonly ?string $thumbnailSource = null,
 		public readonly array $keywords = [],
 		public readonly array $playlists = [],
-		public readonly array $droppedKeywords = []
+		public readonly array $droppedKeywords = [],
+		public readonly bool $embeddable = true,
+		public readonly bool $publicStatsViewable = true,
+		public readonly bool $madeForKids = false,
+		public readonly bool $notifySubscribers = true
 	) {
 	}
 }

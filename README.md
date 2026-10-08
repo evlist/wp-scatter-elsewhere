@@ -89,6 +89,8 @@ wp scatter-elsewhere retry <job-id> [--now]
   upload. Set them on the settings page. To apply them to a video that is already
   on YouTube:
   `wp scatter-elsewhere apply-metadata <post-id> [<video-id>] [--fields=language,license,recording_date]`.
+- Category (22, People & Blogs, by default), embedding allowed, public statistics, "made for kids"
+  and notification of the subscribers are also settings of the uploads; they apply to new uploads.
 - Subtitles: the `<track>` files of the page (WebVTT) are sent after an upload,
   converted to SBV, the YouTube format, by default (setting *Subtitle format*: SBV, SRT or WebVTT as it is). A problem with the
   subtitles never fails the upload, it shows as a warning in `jobs`. To delete the automatic captions of the

@@ -19,7 +19,7 @@ when a slice is about to start. Tentative plan for the YouTube destination (see
 10. [Editor panel](010-editor-panel.md): after publication, choose the video, privacy and license, and follow the upload; the same panel in the sidebar of a published post.
 11. (Merged into 010.) Sidebar button and status, to publish later or retry.
 12. Locale-aware ordinal day placeholder `{ordinal_day}` (implemented): "1er" in French, "1st"/"2nd" in English, the plain number elsewhere.
-13. Additional parameters (category, location, ...).
+13. [Additional parameters](013-additional-parameters.md): category, embeddable, public statistics, made for kids, notify subscribers (implemented; location is left out).
 
 Linking posts that were published before the plugin to the videos that are already on YouTube:
 

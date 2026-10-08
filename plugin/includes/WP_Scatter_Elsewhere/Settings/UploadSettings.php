@@ -26,6 +26,8 @@ class UploadSettings {
 
 	public const LICENSE_VALUES = [ self::LICENSE_YOUTUBE, self::LICENSE_CREATIVE_COMMON ];
 
+	public const DEFAULT_CATEGORY_ID = '22';
+
 	public const SUBTITLE_FORMAT_SBV = 'sbv';
 	public const SUBTITLE_FORMAT_SRT = 'srt';
 	public const SUBTITLE_FORMAT_VTT = 'vtt';
@@ -105,6 +107,47 @@ class UploadSettings {
 		return is_bool( $value ) ? $value : true;
 	}
 
+	/**
+	 * Numeric id of the YouTube category of the videos (22 is "People & Blogs").
+	 */
+	public function categoryId(): string {
+		$value = $this->stored( 'category_id' );
+
+		return is_string( $value ) && self::isValidCategory( $value ) ? $value : self::DEFAULT_CATEGORY_ID;
+	}
+
+	public function isEmbeddable(): bool {
+		return $this->flag( 'embeddable', true );
+	}
+
+	public function publicStatsViewable(): bool {
+		return $this->flag( 'public_stats_viewable', true );
+	}
+
+	/**
+	 * Whether the videos are declared made for kids (YouTube then limits comments and personalised ads).
+	 */
+	public function madeForKids(): bool {
+		return $this->flag( 'made_for_kids', false );
+	}
+
+	/**
+	 * Whether the subscribers are notified of a public upload.
+	 */
+	public function notifiesSubscribers(): bool {
+		return $this->flag( 'notify_subscribers', true );
+	}
+
+	public static function isValidCategory( string $category ): bool {
+		return 1 === preg_match( '/^[0-9]{1,3}$/', $category );
+	}
+
+	private function flag( string $key, bool $default ): bool {
+		$value = $this->stored( $key );
+
+		return is_bool( $value ) ? $value : $default;
+	}
+
 	public function sendsRecordingDate(): bool {
 		$value = $this->stored( 'send_recording_date' );
 
@@ -117,7 +160,7 @@ class UploadSettings {
 	 * @param string $language Empty to derive the language from the site language.
 	 * @throws InvalidArgumentException When a value is invalid; nothing is saved.
 	 */
-	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV, bool $removeAutoCaptions = false, bool $sendThumbnail = true ): void {
+	public function save( string $privacy, string $license, string $language, bool $sendRecordingDate, string $subtitleFormat = self::SUBTITLE_FORMAT_SBV, bool $removeAutoCaptions = false, bool $sendThumbnail = true, string $categoryId = self::DEFAULT_CATEGORY_ID, bool $embeddable = true, bool $publicStatsViewable = true, bool $madeForKids = false, bool $notifySubscribers = true ): void {
 		$language = trim( $language );
 
 		if ( ! self::isValidPrivacy( $privacy ) ) {
@@ -136,8 +179,18 @@ class UploadSettings {
 			throw new InvalidArgumentException( __( 'The subtitle format must be sbv, srt or vtt.', 'wp-scatter-elsewhere' ) );
 		}
 
+		$categoryId = trim( $categoryId );
+		if ( ! self::isValidCategory( $categoryId ) ) {
+			throw new InvalidArgumentException( __( 'The category must be the number of a YouTube category, such as 22.', 'wp-scatter-elsewhere' ) );
+		}
+
 		( $this->saver )(
 			[
+				'category_id'           => $categoryId,
+				'embeddable'            => $embeddable,
+				'public_stats_viewable' => $publicStatsViewable,
+				'made_for_kids'         => $madeForKids,
+				'notify_subscribers'    => $notifySubscribers,
 				'send_thumbnail'      => $sendThumbnail,
 				'subtitle_format'     => $subtitleFormat,
 				'remove_auto_captions' => $removeAutoCaptions,

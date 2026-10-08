@@ -54,9 +54,29 @@ class UploadSettingsTest extends TestCase {
 		$this->settings( [] )->save( 'public', 'creativeCommon', ' fr ', false, 'vtt', true );
 
 		$this->assertSame(
-			[ 'send_thumbnail' => true, 'subtitle_format' => 'vtt', 'remove_auto_captions' => true, 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
+			[ 'category_id' => '22', 'embeddable' => true, 'public_stats_viewable' => true, 'made_for_kids' => false, 'notify_subscribers' => true, 'send_thumbnail' => true, 'subtitle_format' => 'vtt', 'remove_auto_captions' => true, 'default_privacy' => 'public', 'default_license' => 'creativeCommon', 'language' => 'fr', 'send_recording_date' => false ],
 			$this->saved
 		);
+	}
+
+	public function test_the_video_options_have_defaults_and_are_validated(): void {
+		$settings = $this->settings( [] );
+		$this->assertSame( '22', $settings->categoryId() );
+		$this->assertTrue( $settings->isEmbeddable() );
+		$this->assertTrue( $settings->publicStatsViewable() );
+		$this->assertFalse( $settings->madeForKids() );
+		$this->assertTrue( $settings->notifiesSubscribers() );
+
+		$custom = $this->settings( [ 'category_id' => '19', 'embeddable' => false, 'made_for_kids' => true, 'notify_subscribers' => false ] );
+		$this->assertSame( '19', $custom->categoryId() );
+		$this->assertFalse( $custom->isEmbeddable() );
+		$this->assertTrue( $custom->madeForKids() );
+		$this->assertFalse( $custom->notifiesSubscribers() );
+
+		$this->assertSame( '22', $this->settings( [ 'category_id' => 'travel' ] )->categoryId() );
+
+		$this->expectException( InvalidArgumentException::class );
+		$this->settings( [] )->save( 'private', 'youtube', '', true, 'sbv', false, true, 'travel' );
 	}
 
 	public function test_the_subtitle_format_is_validated_and_defaults_to_sbv(): void {

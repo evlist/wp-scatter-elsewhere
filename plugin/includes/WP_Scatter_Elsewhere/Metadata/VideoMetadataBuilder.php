@@ -59,11 +59,15 @@ final class VideoMetadataBuilder {
 			$language,
 			$license ?? $this->settings->defaultLicense(),
 			$this->settings->sendsRecordingDate() ? $this->recordingDate( $post ) : null,
-			VideoMetadata::DEFAULT_CATEGORY_ID,
+			$this->settings->categoryId(),
 			$this->settings->sendsThumbnail() ? $post->featuredImagePath : null,
 			$keywords['kept'],
 			$matched->playlists,
-			$keywords['dropped']
+			$keywords['dropped'],
+			$this->settings->isEmbeddable(),
+			$this->settings->publicStatsViewable(),
+			$this->settings->madeForKids(),
+			$this->settings->notifiesSubscribers()
 		);
 	}
 

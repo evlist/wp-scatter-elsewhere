@@ -26,6 +26,10 @@ final class UploadJob {
 		'description'  => '',
 		'privacy'      => 'private',
 		'category_id'  => '22',
+		'embeddable'   => 1,
+		'public_stats' => 1,
+		'made_for_kids' => 0,
+		'notify'       => 1,
 		'language'     => null,
 		'license'      => 'youtube',
 		'recording_date' => null,
@@ -123,6 +127,22 @@ final class UploadJob {
 
 	public function privacy(): string {
 		return $this->data['privacy'];
+	}
+
+	public function isEmbeddable(): bool {
+		return 0 !== $this->data['embeddable'];
+	}
+
+	public function publicStatsViewable(): bool {
+		return 0 !== $this->data['public_stats'];
+	}
+
+	public function madeForKids(): bool {
+		return 0 !== $this->data['made_for_kids'];
+	}
+
+	public function notifiesSubscribers(): bool {
+		return 0 !== $this->data['notify'];
 	}
 
 	public function categoryId(): string {

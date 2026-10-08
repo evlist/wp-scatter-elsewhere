@@ -172,12 +172,24 @@ class ResumableUploaderTest extends TestCase {
 					'defaultLanguage'      => 'fr',
 					'defaultAudioLanguage' => 'fr',
 				],
-				'status'           => [ 'privacyStatus' => 'private', 'selfDeclaredMadeForKids' => false, 'license' => 'creativeCommon' ],
+				'status'           => [ 'privacyStatus' => 'private', 'selfDeclaredMadeForKids' => false, 'embeddable' => true, 'publicStatsViewable' => true, 'license' => 'creativeCommon' ],
 				'recordingDetails' => [ 'recordingDate' => '2026-10-05T12:00:00Z' ],
 			],
 			json_decode( $init['body'], true )
 		);
 		$this->assertStringContainsString( 'randonnée', $init['body'] );
+	}
+
+	public function test_the_options_of_the_job_are_sent_and_subscribers_may_be_left_alone(): void {
+		$this->uploader()->run( $this->job( [ 'embeddable' => 0, 'public_stats' => 0, 'made_for_kids' => 1, 'notify' => 0 ] ), 600 );
+
+		$init   = $this->server->requests[0];
+		$status = json_decode( $init['body'], true )['status'];
+
+		$this->assertFalse( $status['embeddable'] );
+		$this->assertFalse( $status['publicStatsViewable'] );
+		$this->assertTrue( $status['selfDeclaredMadeForKids'] );
+		$this->assertStringContainsString( '&notifySubscribers=false', $init['url'] );
 	}
 
 	public function test_language_and_recording_details_are_left_out_when_unknown(): void {

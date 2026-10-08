@@ -136,7 +136,9 @@ final class ResumableUploader {
 			'snippet' => $snippet,
 			'status'  => [
 				'privacyStatus'           => $job->privacy(),
-				'selfDeclaredMadeForKids' => false,
+				'selfDeclaredMadeForKids' => $job->madeForKids(),
+				'embeddable'              => $job->isEmbeddable(),
+				'publicStatsViewable'     => $job->publicStatsViewable(),
 				'license'                 => $job->license(),
 			],
 		];
@@ -152,7 +154,7 @@ final class ResumableUploader {
 
 		$response = $this->send(
 			'POST',
-			self::INIT_ENDPOINT . implode( ',', $parts ),
+			self::INIT_ENDPOINT . implode( ',', $parts ) . ( $job->notifiesSubscribers() ? '' : '&notifySubscribers=false' ),
 			$this->headers(
 				$token,
 				[
