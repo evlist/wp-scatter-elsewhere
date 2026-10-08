@@ -36,15 +36,14 @@ Updating and administration pages:
 21. [Quota meter](021-quota-meter.md): the plugin counts the YouTube quota it spends and shows it in the settings, warns in the panels and limits the batch operations (counting, settings, panel notice and command implemented).
 22. [Category from the term rules](022-category-from-rules.md): a third optional output of the rules, single-valued, most specific term wins (implemented).
 
+Review and update:
+
+23. [Review and edit the metadata before sending](023-review-and-edit-metadata.md): see what will be sent, change it, and keep the edits as overrides that later updates respect (planned).
+24. [Update a video after its post changed](024-update-after-post-change.md): remember what was sent, tell when the post changed, and update from the panel or WP-CLI after a preview of the differences (planned).
+
 ## Ideas to schedule
 
-Points raised during the first real upload, not yet planned as slices:
-
-- **Update an existing video**: after a published post is modified, push the new
-  title, description and other metadata to the YouTube video already linked to it
-  (`videos.update`, much cheaper in quota than an upload). Probably needs a way to
-  tell that the post changed since the last push, and to be triggered like uploads
-  (editor button, WP-CLI).
-- **Review and edit the metadata before the upload**: an optional step that shows
-  the composed title, description and other metadata, and lets the author change
-  them before they are sent. It should work for uploads and for updates.
+- An automatic push of the update when a post is saved (with the safeguards of the bulk tools).
+- A column or filter in the list of posts showing the videos that are out of date.
+- A restore function from the log of the bulk updates.
+- The location of the video (coordinates per post).
