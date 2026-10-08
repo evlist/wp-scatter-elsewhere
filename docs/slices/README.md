@@ -28,6 +28,12 @@ Linking posts that were published before the plugin to the videos that are alrea
 16. [Suggest the video of a post](016-suggest-video-for-post.md): matching by the permalink left in the description by the old script, by title and by date. (implemented)
 17. [Link all the old posts](017-link-existing-in-bulk.md): a WP-CLI command that reports first and links the confident matches on request. (implemented)
 
+Updating and administration pages:
+
+18. [Update many videos at once](018-batch-update-videos.md): a WP-CLI command that applies the current settings and rules to the linked videos, field by field, with add or add-and-remove for playlists and keywords (planned).
+19. [Administration page: link the old posts](019-link-tools-page.md): the bulk linking of 017 in Tools, with a review table and undo (planned).
+20. [Administration page: update the videos](020-update-tools-page.md): the bulk update of 018 in Tools, with preview and a background run (planned).
+
 ## Ideas to schedule
 
 Points raised during the first real upload, not yet planned as slices:
