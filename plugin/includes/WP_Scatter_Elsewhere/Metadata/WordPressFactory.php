@@ -117,7 +117,8 @@ final class WordPressFactory {
 			(string) get_the_author_meta( 'display_name', (int) $post->post_author ),
 			$terms,
 			self::featuredImagePath( $post ),
-			$details
+			$details,
+			static fn(): string => (string) apply_filters( 'the_content', $post->post_content )
 		);
 	}
 }

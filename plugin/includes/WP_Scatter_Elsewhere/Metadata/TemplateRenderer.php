@@ -68,6 +68,10 @@ final class TemplateRenderer {
 				return ( $this->dateFormatter )( $post->date, $placeholder->argument );
 			case 'ordinal_day':
 				return OrdinalDay::format( (int) $post->date->format( 'j' ), ( $this->locale )() );
+			case 'section':
+				return ( new SectionExtractor() )->section( $post->content(), (string) $placeholder->argument );
+			case 'paragraphs':
+				return ( new SectionExtractor() )->paragraphs( $post->content(), (int) $placeholder->argument );
 			case 'categories':
 				return $this->terms( $post, 'category' );
 			case 'tags':

@@ -27,6 +27,8 @@ final class TemplateParser {
 		'ordinal_day' => 'none',
 		'date'       => 'optional',
 		'terms'      => 'required',
+		'section'    => 'required',
+		'paragraphs' => 'required',
 	];
 
 	/**

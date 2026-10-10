@@ -27,7 +27,21 @@ final class PostData {
 		public readonly string $author,
 		public readonly array $terms = [],
 		public readonly ?string $featuredImagePath = null,
-		public readonly array $termDetails = []
+		public readonly array $termDetails = [],
+		private ?\Closure $contentProvider = null
 	) {
+	}
+
+	private ?string $contentCache = null;
+
+	/**
+	 * The content of the post as HTML (blocks rendered), read only when a template needs it.
+	 */
+	public function content(): string {
+		if ( null === $this->contentCache ) {
+			$this->contentCache = null === $this->contentProvider ? '' : (string) ( $this->contentProvider )();
+		}
+
+		return $this->contentCache;
 	}
 }
