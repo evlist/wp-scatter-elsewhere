@@ -45,6 +45,7 @@ A second target, Outdooractive (drafts, to be confirmed with the fields of the r
 
 25. [Outdooractive: link a tour to a post](025-outdooractive-link-tour.md): record which tour tells the same hike as a post, without any access to Outdooractive (draft).
 26. [Outdooractive: prepare the description of a tour](026-outdooractive-description.md): compose the fields of the description from the post, edit and copy them to paste in the tour (draft).
+27. [Outdooractive: prepare the photos of a tour](027-outdooractive-photos.md): select, order and caption the images of a post and offer them as one download, to add to the tour (draft).
 
 ## Ideas to schedule
 
