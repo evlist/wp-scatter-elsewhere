@@ -17,18 +17,24 @@ planned route. The plugin never connects to Outdooractive.
 
 ## Context (what is known)
 
-- The import page of the website accepts **a ZIP of GPX or FIT files**. It says that when the
-  content comes from Komoot, the import "will also include the texts and the photos" of the tracks, and
-  that the activity (hike, bike...) of FIT files is recognised. For the activities of other files, a
-  **ZIP template** can be downloaded from the page.
+- The import page of the website accepts **a ZIP of GPX or FIT files**. For the activity (hike, bike...),
+  the **template ZIP** of the page is only a set of **empty folders named after the activities**
+  (Hiking, Mountaineering, Mountain biking, Cycling, Gravel biking, Road biking, Running, Downhill
+  Skiing, Ski touring) and a `HOWTO.txt` in five languages: the tracks are sorted into the folders
+  before the upload, and those left outside a folder are imported as hikes. It says nothing about
+  texts or photos, and nothing suggests that a photo could be tied to a track in a generic ZIP.
+- The page also says that a ZIP **from Komoot** is recognised and that its texts and photos are
+  imported too. Komoot's own export format is not documented publicly (the support pages only
+  describe GPX downloads, one tour at a time, with the geometry only), so the layout that Outdooractive
+  reads is unknown.
 - The website lets the author choose between a **route** and a **trace**; the Android application
   imports a file as a route only.
 - After an import, a summary flags the duplicates and what could not be imported.
-- Not known: the layout of the ZIP (folders, file names, the files that carry the text and the photos
-  for the Komoot case), whether the plain GPX tags `<name>` and `<desc>` are read, the limits of size
-  and number, and the way a ZIP of ordinary files is classified as traces or routes.
-- A hike already recorded with the Outdooractive application is **not** a case for this slice: the
-  import would create a duplicate (slices 026 and 027 serve it).
+- Not known: whether the plain GPX tags `<name>`, `<desc>` (and `<link>`, `<wpt>`, `<extensions>`) are
+  read, the limits of size and number, and the layout of the Komoot export.
+- Most of the author's hikes were recorded with the Outdooractive application: importing the GPX again
+  creates **a duplicate**, which is acceptable if it brings the text (and the photos), because the
+  original can then be deleted by hand. The link of slice 025 then points at the new trace.
 
 ## User story
 
@@ -74,9 +80,23 @@ writer), reusing `DescriptionComposer`, `PhotoSelection` and `PhotoPackager`.
 2. The ZIP follows the layout of the page (template or Komoot), with the files named as it expects.
 3. The unit tests check the layout (names, order, content) without WordPress.
 
-## First step: a manual experiment, before any code
+## Experiments to run before any code (in this order, each decides the next)
 
-1. Download the **template ZIP** from the import page and look at its content.
-2. Make a small ZIP by hand with one GPX (with `<name>` and `<desc>`) and two photos, in the layout of
-   the template, and import it as a trace: what is read (title, text, photos, activity)?
-3. Report the layout and the result; this decides whether the slice is worth building.
+1. **Plain GPX with text.** Put a GPX of the author's in the `Hiking/` folder of a ZIP, with a `<name>`
+   and a `<desc>` (and a `<link>` to the post) added to the track (`<trk>`), and import it **as a trace**
+   on a test: are the title and the description filled? This is the cheapest path (the plugin only
+   rewrites a GPX and zips it) and it also settles what can be put in the GPX. The plugin can prepare
+   this GPX by hand before it is automated: copy the track, add the three tags.
+2. **Waypoints with text.** If the track comes out without text, try the same text in a `<wpt>` and in
+   `<extensions>` to see whether anything is kept.
+3. **The Komoot layout.** If the author has a Komoot account, make a **data export** (or download the
+   GPX and the details of one tour) and look at the layout of the ZIP, in particular where the title,
+   the text and the photos of a tour are. Build the same layout with one hike of the blog and import
+   it. This is the only known way to bring photos with the track; if the format is not reproducible
+   (identifiers, signed files), the photos stay with slice 027.
+4. **Duplicates.** Check what the import summary says when the same trace already exists, and whether
+   the original can be deleted at once (the author's plan: import the enriched trace, then delete the
+   original recorded by the application, losing nothing but the identifier of the old tour).
+
+The result of the first experiment decides whether this slice is just "a GPX with the title and the
+description added, in a ZIP" (small) or needs the Komoot layout (large and uncertain).
