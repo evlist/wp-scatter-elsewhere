@@ -80,6 +80,15 @@ writer), reusing `DescriptionComposer`, `PhotoSelection` and `PhotoPackager`.
 2. The ZIP follows the layout of the page (template or Komoot), with the files named as it expects.
 3. The unit tests check the layout (names, order, content) without WordPress.
 
+## Result of the first experiment (October 2026)
+
+A GPX with a `<name>` and a `<desc>` in its track, imported as a trace through the bulk import, gave a
+trace whose **title is the `<name>` and whose description is the `<desc>`** (the test strings ended with
+"(name)" and "(desc)" to prove it). The trace was created **private** (visible to its author, or through a
+share link). No link, waypoint or photo appeared; the activity was one the author had chosen (not a hike).
+So the slice is the **small** version: rewrite the GPX of the post with the title and the composed
+description, put it in a ZIP, in the folder of the activity.
+
 ## Experiments to run before any code (in this order, each decides the next)
 
 1. **Plain GPX with text.** Put a GPX of the author's in the `Hiking/` folder of a ZIP, with a `<name>`
