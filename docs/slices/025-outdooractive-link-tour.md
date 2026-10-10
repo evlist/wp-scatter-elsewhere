@@ -16,9 +16,12 @@ talk to Outdooractive.
 
 ## Context
 
-- The tours are **recorded with the application of Outdooractive**. A GPX file imported on the site
-  becomes a planned route (a "parcours"), not a recorded tour, so the tour cannot be created from the
-  blog: it already exists and only its description is missing (slice 026).
+- Two situations exist. When the hike was **recorded with the application of Outdooractive**, the
+  trace already exists and only its description is missing (slices 026 and 027). When it was recorded
+  elsewhere (a watch, another application), the GPX file can be imported on the **website**, which lets
+  the author choose between a planned route (a "parcours") and a recorded trace (the Android
+  application always imports as a route), and the **bulk ZIP import** can carry the texts and the
+  photos as well (slice 028). The link of this slice serves both.
 - Outdooractive offers no documented way for a user to edit their own tour by an API: the Data API is
   a licensed, read-oriented API for partners. The plugin therefore does **not** read or write
   anything on Outdooractive in this slice.

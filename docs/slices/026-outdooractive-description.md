@@ -17,8 +17,9 @@ the text into the editing form of the tour, which is the part that took the time
 
 Documenting a recorded tour on Outdooractive means a title, a short description, a longer text and
 practical information (access, start and end, difficulty, tips, equipment...). The author has
-already written all this in the post. Since there is no API that edits a user's tour and an imported
-GPX would become a planned route, the realistic help is a **ready-to-paste text**.
+already written all this in the post. Since there is no API that edits a user's tour, the realistic help for a trace that already exists is
+a **ready-to-paste text**. For a trace that does not exist yet, the ZIP import of slice 028 can carry
+the text with the trace.
 
 ## User story
 

@@ -17,8 +17,9 @@ images of the post, orders them, gives each its caption and credit, and offers t
 
 The post already holds the best photos of the hike, with captions in the media library and often the
 original files with their GPS coordinates. Rebuilding that selection in the tour is a long, manual
-step. Without an API that adds photos to a user's tour, the help is to **make the selection and the
-files ready**.
+step. Without an API that adds photos to a user's tour, the help for a trace that already exists is to
+**make the selection and the files ready**. For a trace that does not exist yet, the ZIP import of
+slice 028 can carry the photos with the trace.
 
 ## User story
 
