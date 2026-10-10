@@ -89,6 +89,17 @@ share link). No link, waypoint or photo appeared; the activity was one the autho
 So the slice is the **small** version: rewrite the GPX of the post with the title and the composed
 description, put it in a ZIP, in the folder of the activity.
 
+## What the real post and GPX look like (October 2026)
+
+- The GPX is a **file of the uploads folder linked in the content** ("Download file: 20261008-vanlife.gpx",
+  under `wp-content/uploads/photos/...`), once per post, under the technical summary; it is found like
+  the videos (the links of the rendered page, mapped to the local file).
+- It comes from the **PhoneTrack** application of Nextcloud, not from Outdooractive: there is no trace to
+  duplicate. It already has a `<name>` and a `<desc>` in **both** `<metadata>` and `<trk>` ("s25", "1 device"),
+  so the plugin **replaces both** and adds them when missing. It weighs about 1.2 MB for a 338 km day.
+- The post has the title "Salers ⇾ Pérols", the category "Vanlife", the tag "france", a "Topoguide"
+  section and a "Carnet de voyage" section that opens with an italic one-line summary.
+
 ## Experiments to run before any code (in this order, each decides the next)
 
 1. **Plain GPX with text.** Put a GPX of the author's in the `Hiking/` folder of a ZIP, with a `<name>`
