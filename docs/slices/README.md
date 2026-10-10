@@ -41,9 +41,16 @@ Review and update:
 23. [Review and edit the metadata before sending](023-review-and-edit-metadata.md): see what will be sent, change it, and keep the edits as overrides that later updates respect (planned).
 24. [Update a video after its post changed](024-update-after-post-change.md): remember what was sent, tell when the post changed, and update from the panel or WP-CLI after a preview of the differences (planned).
 
+A second target, Outdooractive (drafts, to be confirmed with the fields of the real form):
+
+25. [Outdooractive: link a tour to a post](025-outdooractive-link-tour.md): record which tour tells the same hike as a post, without any access to Outdooractive (draft).
+26. [Outdooractive: prepare the description of a tour](026-outdooractive-description.md): compose the fields of the description from the post, edit and copy them to paste in the tour (draft).
+
 ## Ideas to schedule
 
 - An automatic push of the update when a post is saved (with the safeguards of the bulk tools).
 - A column or filter in the list of posts showing the videos that are out of date.
 - A restore function from the log of the bulk updates.
 - The location of the video (coordinates per post).
+- A browser-side helper that fills the editing form of an Outdooractive tour (only after slice 026, and after reading their terms of use).
+- An official way to edit a tour (to ask Outdooractive's support or API team).
