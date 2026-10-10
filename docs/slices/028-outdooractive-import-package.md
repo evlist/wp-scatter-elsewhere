@@ -89,8 +89,10 @@ writer), reusing `DescriptionComposer`, `PhotoSelection` and `PhotoPackager`.
    this GPX by hand before it is automated: copy the track, add the three tags.
 2. **Waypoints with text.** If the track comes out without text, try the same text in a `<wpt>` and in
    `<extensions>` to see whether anything is kept.
-3. **The Komoot layout.** If the author has a Komoot account, make a **data export** (or download the
-   GPX and the details of one tour) and look at the layout of the ZIP, in particular where the title,
+3. **The Komoot layout.** Komoot has no self-service export of everything: Outdooractive explains that it
+   is a GDPR **request for access to the personal data**, made to Komoot's support, which answers with a
+   ZIP (profile, photos, tracks as GPX or FIT). The author made the request after adding a few photos to
+   a few tours (October 2026); the answer is awaited. Look at the layout of that ZIP, in particular where the title,
    the text and the photos of a tour are. Build the same layout with one hike of the blog and import
    it. This is the only known way to bring photos with the track; if the format is not reproducible
    (identifiers, signed files), the photos stay with slice 027.
