@@ -57,7 +57,16 @@ final class LocalFileResolver {
 	 * @return LocalFile|string A LocalFile, or a translatable reason why the URL is not usable.
 	 */
 	public function resolveVideo( string $url ): LocalFile|string {
-		return $this->resolve( $url, true );
+		return $this->resolve( $url, 'video' );
+	}
+
+	/**
+	 * Resolves the URL of any file of the uploads directory, such as a GPX file.
+	 *
+	 * @return LocalFile|string A LocalFile, or a translatable reason why the URL is not usable.
+	 */
+	public function resolveFile( string $url ): LocalFile|string {
+		return $this->resolve( $url, 'file' );
 	}
 
 	/**
@@ -66,7 +75,7 @@ final class LocalFileResolver {
 	 * @return LocalFile|string A LocalFile, or a translatable reason why the URL is not usable.
 	 */
 	public function resolveSubtitle( string $url ): LocalFile|string {
-		return $this->resolve( $url, false );
+		return $this->resolve( $url, 'subtitle' );
 	}
 
 	/**
@@ -98,7 +107,7 @@ final class LocalFileResolver {
 	/**
 	 * @return LocalFile|string
 	 */
-	private function resolve( string $url, bool $isVideo ): LocalFile|string {
+	private function resolve( string $url, string $kind ): LocalFile|string {
 		$relative = $this->relativePath( $url );
 		if ( null === $relative ) {
 			return __( 'The file is not in the uploads directory of this site.', 'wp-scatter-elsewhere' );
@@ -112,7 +121,7 @@ final class LocalFileResolver {
 		}
 
 		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
-		$mimeType  = $isVideo ? ( self::VIDEO_TYPES[ $extension ] ?? null ) : ( self::OTHER_TYPES[ $extension ] ?? 'application/octet-stream' );
+		$mimeType  = 'video' === $kind ? ( self::VIDEO_TYPES[ $extension ] ?? null ) : ( self::OTHER_TYPES[ $extension ] ?? 'application/octet-stream' );
 		if ( null === $mimeType ) {
 			return __( 'The file is not a supported video type.', 'wp-scatter-elsewhere' );
 		}

@@ -6,6 +6,7 @@ namespace WP_Scatter_Elsewhere\Admin;
 
 use InvalidArgumentException;
 use WP_Scatter_Elsewhere\Metadata\WordPressFactory as MetadataFactory;
+use WP_Scatter_Elsewhere\Outdooractive\WordPressFactory as OutdooractiveFactory;
 use WP_Scatter_Elsewhere\Quota\QuotaMeter;
 use WP_Scatter_Elsewhere\Rules\WordPressFactory as RulesFactory;
 use WP_Scatter_Elsewhere\Settings\UploadSettings;
@@ -27,6 +28,7 @@ class SettingsPage {
 	private const ACTION_UPLOAD     = 'wp_scatter_elsewhere_save_upload_settings';
 	private const ACTION_RULES      = 'wp_scatter_elsewhere_save_term_rules';
 	private const ACTION_QUOTA      = 'wp_scatter_elsewhere_save_quota';
+	private const ACTION_OA         = 'wp_scatter_elsewhere_save_outdooractive';
 
 	/** Empty rows offered below the existing rules. */
 	private const BLANK_RULE_ROWS = 3;
@@ -43,6 +45,7 @@ class SettingsPage {
 		add_action( 'admin_post_' . self::ACTION_UPLOAD, [ $this, 'handleSaveUploadSettings' ] );
 		add_action( 'admin_post_' . self::ACTION_RULES, [ $this, 'handleSaveRules' ] );
 		add_action( 'admin_post_' . self::ACTION_QUOTA, [ $this, 'handleSaveQuota' ] );
+		add_action( 'admin_post_' . self::ACTION_OA, [ $this, 'handleSaveOutdooractive' ] );
 		add_action( 'admin_post_' . WordPressFactory::CALLBACK_ACTION, [ $this, 'handleCallback' ] );
 	}
 
@@ -100,6 +103,23 @@ class SettingsPage {
 		}
 
 		$this->redirect( 'upload_saved' );
+	}
+
+	public function handleSaveOutdooractive(): void {
+		$this->guard( self::ACTION_OA );
+
+		try {
+			OutdooractiveFactory::settings()->save(
+				isset( $_POST['oa_title'] ) ? sanitize_text_field( wp_unslash( $_POST['oa_title'] ) ) : '',
+				isset( $_POST['oa_description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['oa_description'] ) ) : '',
+				isset( $_POST['oa_activity'] ) ? sanitize_text_field( wp_unslash( $_POST['oa_activity'] ) ) : '',
+				isset( $_POST['oa_suffixes'] ) ? sanitize_textarea_field( wp_unslash( $_POST['oa_suffixes'] ) ) : ''
+			);
+		} catch ( InvalidArgumentException $e ) {
+			$this->redirectWithError( $e->getMessage() );
+		}
+
+		$this->redirect( 'oa_saved' );
 	}
 
 	public function handleSaveQuota(): void {
@@ -267,8 +287,47 @@ class SettingsPage {
 
 			<?php $this->renderQuota(); ?>
 
+			<?php $this->renderOutdooractive(); ?>
+
 			<?php $this->renderRules(); ?>
 		</div>
+		<?php
+	}
+
+	private function renderOutdooractive(): void {
+		$settings = OutdooractiveFactory::settings();
+		?>
+		<h2><?php echo esc_html__( 'Outdooractive', 'wp-scatter-elsewhere' ); ?></h2>
+		<p class="description"><?php echo esc_html__( 'The command "wp scatter-elsewhere oa-package" prepares a ZIP file for the bulk import of Outdooractive: the GPX file of each post, with the name and the description below (Outdooractive reads them as the title and the description of the trace), in the folder of its activity. Nothing is sent to Outdooractive.', 'wp-scatter-elsewhere' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION_OA ); ?>" />
+			<?php wp_nonce_field( self::ACTION_OA ); ?>
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="wpse-oa-title"><?php echo esc_html__( 'Title template', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td><input type="text" id="wpse-oa-title" name="oa_title" class="large-text code" value="<?php echo esc_attr( $settings->titleTemplate() ); ?>" /></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-oa-description"><?php echo esc_html__( 'Description template', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<textarea id="wpse-oa-description" name="oa_description" rows="6" class="large-text code"><?php echo esc_textarea( $settings->descriptionTemplate() ); ?></textarea>
+						<p class="description"><?php echo esc_html__( 'The placeholders of the YouTube templates, and {section:Heading} (the text under a heading of the post) and {paragraphs:N} (its first N paragraphs).', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-oa-activity"><?php echo esc_html__( 'Default activity', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td><input type="text" id="wpse-oa-activity" name="oa_activity" class="regular-text" value="<?php echo esc_attr( $settings->defaultActivity() ); ?>" /></td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wpse-oa-suffixes"><?php echo esc_html__( 'Activities by file name', 'wp-scatter-elsewhere' ); ?></label></th>
+					<td>
+						<textarea id="wpse-oa-suffixes" name="oa_suffixes" rows="4" class="large-text code"><?php echo esc_textarea( $settings->suffixesText() ); ?></textarea>
+						<p class="description"><?php echo esc_html__( 'One per line, "end of the name = activity", for example "vanlife = Camping-car" for 20261008-vanlife.gpx. An activity set on the file (post meta _wp_scatter_elsewhere_oa_activity of the attachment) takes precedence.', 'wp-scatter-elsewhere' ); ?></p>
+					</td>
+				</tr>
+			</table>
+			<?php submit_button( __( 'Save the Outdooractive settings', 'wp-scatter-elsewhere' ) ); ?>
+		</form>
 		<?php
 	}
 
@@ -585,6 +644,7 @@ class SettingsPage {
 			'templates_saved' => __( 'Templates saved.', 'wp-scatter-elsewhere' ),
 			'upload_saved'    => __( 'Upload settings saved.', 'wp-scatter-elsewhere' ),
 			'quota_saved'     => __( 'Quota settings saved.', 'wp-scatter-elsewhere' ),
+			'oa_saved'        => __( 'Outdooractive settings saved.', 'wp-scatter-elsewhere' ),
 			'rules_saved'     => __( 'Rules saved.', 'wp-scatter-elsewhere' ),
 		];
 

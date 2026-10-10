@@ -26,22 +26,20 @@ final class WordPressFactory {
 		);
 	}
 
-	public static function composer(): MetadataComposer {
-		$parser = new TemplateParser();
+	public static function renderer(): TemplateRenderer {
+		return new TemplateRenderer(
+			new TemplateParser(),
+			static function ( DateTimeImmutable $date, ?string $format ): string {
+				$format = null === $format ? (string) get_option( 'date_format' ) : $format;
 
-		return new MetadataComposer(
-			self::templateSettings(),
-			new TemplateRenderer(
-				$parser,
-				static function ( DateTimeImmutable $date, ?string $format ): string {
-					$format = null === $format ? (string) get_option( 'date_format' ) : $format;
-
-					return (string) wp_date( $format, $date->getTimestamp() );
-				},
-				static fn(): string => determine_locale()
-			),
-			new YouTubeTextNormalizer()
+				return (string) wp_date( $format, $date->getTimestamp() );
+			},
+			static fn(): string => determine_locale()
 		);
+	}
+
+	public static function composer(): MetadataComposer {
+		return new MetadataComposer( self::templateSettings(), self::renderer(), new YouTubeTextNormalizer() );
 	}
 
 	/**

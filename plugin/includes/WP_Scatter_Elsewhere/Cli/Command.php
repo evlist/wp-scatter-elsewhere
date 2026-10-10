@@ -16,6 +16,7 @@ use WP_Scatter_Elsewhere\Matching\BulkLinker;
 use WP_Scatter_Elsewhere\Matching\Suggestion;
 use WP_Scatter_Elsewhere\Matching\VideoMatcher;
 use WP_Scatter_Elsewhere\Matching\WordPressFactory as MatchingFactory;
+use WP_Scatter_Elsewhere\Outdooractive\WordPressFactory as OutdooractiveFactory;
 use WP_Scatter_Elsewhere\Publication\LinkException;
 use WP_Scatter_Elsewhere\Publication\WordPressFactory as PublicationFactory;
 use WP_Scatter_Elsewhere\Thumbnails\WordPressFactory as ThumbnailFactory;
@@ -929,6 +930,107 @@ final class Command {
 		} else {
 			WP_CLI::success( __( 'Done.', 'wp-scatter-elsewhere' ) );
 		}
+	}
+
+	/**
+	 * Prepares a ZIP file for the bulk import of Outdooractive (Ma Page > Importer des traces / parcours).
+	 *
+	 * The GPX file linked in each post is copied with a name and a description set from the templates of the
+	 * Outdooractive settings (Outdooractive reads them as the title and the description of the trace), and put in
+	 * the folder of its activity. The original file is never changed. Nothing is sent to Outdooractive: upload the
+	 * ZIP on the import page and choose to import traces.
+	 *
+	 * The activity is the one stored on the file (post meta _wp_scatter_elsewhere_oa_activity of the attachment), else
+	 * the one that goes with the end of its name in the settings (20261008-vanlife.gpx), else the default one.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<post-id>...]
+	 * : The posts whose GPX files go in the ZIP.
+	 *
+	 * [--since=<date>]
+	 * : Instead of post IDs, the posts dated on or after this date (YYYY-MM-DD) that link a GPX file.
+	 *
+	 * [--limit=<n>]
+	 * : With --since, at most this number of posts, oldest first.
+	 *
+	 * [--activity=<folder>]
+	 * : Force the folder (activity) of all the files, for example Hiking.
+	 *
+	 * [--out=<file>]
+	 * : The ZIP file to write. Defaults to oa-package-<date>.zip in the current directory.
+	 *
+	 * [--dry-run]
+	 * : Only list what would be in the ZIP.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp scatter-elsewhere oa-package 58608
+	 *     wp scatter-elsewhere oa-package --since=2026-10-01 --out=/tmp/oa.zip
+	 *     wp post meta update 58609 _wp_scatter_elsewhere_oa_activity Camping-car
+	 *
+	 * @subcommand oa-package
+	 *
+	 * @param string[]              $args
+	 * @param array<string, mixed> $assoc
+	 */
+	public function oa_package( array $args, array $assoc ): void {
+		$ids = array_map( 'intval', $args );
+
+		if ( [] === $ids ) {
+			if ( empty( $assoc['since'] ) ) {
+				WP_CLI::error( __( 'Give post IDs, or --since to take the posts that link a GPX file.', 'wp-scatter-elsewhere' ) );
+			}
+
+			$ids = MatchingFactory::postsWithVideo( null, (string) $assoc['since'], isset( $assoc['limit'] ) ? max( 1, (int) $assoc['limit'] ) : 0, false, 'gpx' );
+		}
+
+		$files = [];
+		$rows  = [];
+
+		foreach ( $ids as $postId ) {
+			$post = get_post( $postId );
+			if ( ! $post instanceof \WP_Post ) {
+				WP_CLI::warning( sprintf( /* translators: %d: post ID. */ __( 'Post %d does not exist.', 'wp-scatter-elsewhere' ), $postId ) );
+				continue;
+			}
+
+			$found = OutdooractiveFactory::files( $post, isset( $assoc['activity'] ) ? (string) $assoc['activity'] : null );
+
+			foreach ( $found['problems'] as $problem ) {
+				WP_CLI::warning( sprintf( /* translators: 1: post ID, 2: problem. */ __( 'Post %1$d: %2$s', 'wp-scatter-elsewhere' ), $postId, $problem ) );
+			}
+
+			if ( [] === $found['files'] && [] === $found['problems'] ) {
+				WP_CLI::warning( sprintf( /* translators: %d: post ID. */ __( 'Post %d links no GPX file.', 'wp-scatter-elsewhere' ), $postId ) );
+			}
+
+			foreach ( $found['files'] as $file ) {
+				$files[] = [ 'folder' => $file['folder'], 'name' => $file['name'], 'content' => $file['content'] ];
+				$rows[]  = [ 'post' => $postId, 'activity' => $file['folder'], 'file' => $file['name'], 'title' => $file['title'], 'description' => mb_strimwidth( str_replace( "\n", ' ', $file['description'] ), 0, 80, '…' ) ];
+			}
+		}
+
+		if ( [] === $files ) {
+			WP_CLI::error( __( 'No GPX file to put in a ZIP.', 'wp-scatter-elsewhere' ) );
+		}
+
+		\WP_CLI\Utils\format_items( 'table', $rows, [ 'post', 'activity', 'file', 'title', 'description' ] );
+
+		if ( ! empty( $assoc['dry-run'] ) ) {
+			WP_CLI::success( sprintf( /* translators: %d: number of files. */ __( '%d file(s) would be in the ZIP. Nothing was written.', 'wp-scatter-elsewhere' ), count( $files ) ) );
+			return;
+		}
+
+		$out = isset( $assoc['out'] ) ? (string) $assoc['out'] : 'oa-package-' . gmdate( 'Ymd-His' ) . '.zip';
+
+		try {
+			( new \WP_Scatter_Elsewhere\Outdooractive\PackageBuilder( \Closure::fromCallable( [ OutdooractiveFactory::class, 'writeZip' ] ) ) )->build( $out, $files );
+		} catch ( \RuntimeException $e ) {
+			WP_CLI::error( $e->getMessage() );
+		}
+
+		WP_CLI::success( sprintf( /* translators: 1: number of files, 2: path of the ZIP. */ __( '%1$d file(s) written to %2$s. Import it in Outdooractive (Ma Page > Importer des traces / parcours) and choose traces.', 'wp-scatter-elsewhere' ), count( $files ), $out ) );
 	}
 
 	/**

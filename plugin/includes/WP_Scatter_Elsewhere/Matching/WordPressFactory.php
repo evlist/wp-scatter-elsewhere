@@ -49,9 +49,10 @@ final class WordPressFactory {
 	 * @param ?string    $since        Only the posts dated on or after this date (YYYY-MM-DD).
 	 * @param int        $limit        Maximum number of posts, 0 for all of them.
 	 * @param bool       $unlinkedOnly Leave out the posts that already have a linked video.
+	 * @param string     $needle       Text the content must contain ("video" by default; "gpx" to find the posts with a GPX file).
 	 * @return int[]
 	 */
-	public static function postsWithVideo( ?array $only = null, ?string $since = null, int $limit = 0, bool $unlinkedOnly = false ): array {
+	public static function postsWithVideo( ?array $only = null, ?string $since = null, int $limit = 0, bool $unlinkedOnly = false, string $needle = 'video' ): array {
 		$query = [
 			'post_type'      => 'any',
 			'post_status'    => 'publish',
@@ -79,7 +80,7 @@ final class WordPressFactory {
 
 		$ids = [];
 		foreach ( get_posts( $query ) as $postId ) {
-			if ( isset( $linkedPosts[ (int) $postId ] ) || false === stripos( (string) get_post_field( 'post_content', (int) $postId ), 'video' ) ) {
+			if ( isset( $linkedPosts[ (int) $postId ] ) || false === stripos( (string) get_post_field( 'post_content', (int) $postId ), $needle ) ) {
 				continue;
 			}
 

@@ -122,3 +122,26 @@ description, put it in a ZIP, in the folder of the activity.
 
 The result of the first experiment decides whether this slice is just "a GPX with the title and the
 description added, in a ZIP" (small) or needs the Komoot layout (large and uncertain).
+
+## Status: first version implemented (October 2026)
+
+The small version, as a WP-CLI command, with its settings:
+
+- `wp scatter-elsewhere oa-package [<post-id>...] [--since=<date> --limit=<n>] [--activity=<folder>] [--out=<file>] [--dry-run]`
+  finds the GPX file linked in each post (the links of the rendered content, mapped to the uploads), copies it
+  with the title and the description composed from the templates in both the metadata and the first track,
+  puts it in the folder of its activity and writes the ZIP. The original is never changed.
+- **Activity (folder)**: the value stored on the file (post meta `_wp_scatter_elsewhere_oa_activity` of the
+  attachment, which can be set with `wp post meta update <attachment-id> ...`), else the one that goes with the
+  end of the file name in the settings (`vanlife = Camping-car` for `20261008-vanlife.gpx`), else the default
+  activity (Hiking).
+- **Templates**: the settings page has an Outdooractive section (title, description, default activity and the
+  activities by file name). The templates take the placeholders of the YouTube ones, and two new ones that
+  also work there: `{section:Heading}` (the text under a heading, whatever the emoji in it) and
+  `{paragraphs:N}`.
+- Code: `Outdooractive/` (`GpxLinks`, `GpxEnricher`, `ActivityResolver`, `PackageBuilder`,
+  `PackageSettings`, `WordPressFactory`), `Metadata/SectionExtractor`, `LocalFileResolver::resolveFile()`.
+  Tested without WordPress; the whole chain was also run on the real GPX of the post of 8 October
+  (1.2 MB, well-formed result).
+- Not done: the button in the editor panel, the link of the new trace to the post (slice 025), the photos
+  (slice 027 and the Komoot experiment), a field on the attachment screen for the activity.
