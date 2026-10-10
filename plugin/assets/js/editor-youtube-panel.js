@@ -657,18 +657,32 @@
 		return el( 'div', null, children );
 	};
 
+	// The panels only make sense for the content that can hold a video, not for the templates, patterns or
+	// navigation menus of the site editor.
+	const allowedPostTypes = ( window.wpScatterElsewhereEditor && window.wpScatterElsewhereEditor.postTypes ) || [ 'post', 'page' ];
+
+	const Panels = function () {
+		const postType = useSelect( ( select ) => select( 'core/editor' ).getCurrentPostType(), [] );
+
+		if ( ! allowedPostTypes.includes( postType ) ) {
+			return null;
+		}
+
+		return el(
+			wp.element.Fragment,
+			null,
+			PluginPostPublishPanel
+				? el( PluginPostPublishPanel, { name: 'wp-scatter-elsewhere-youtube-publish', title: __( 'YouTube', 'wp-scatter-elsewhere' ), initialOpen: true }, el( YouTubePanel ) )
+				: null,
+			PluginDocumentSettingPanel
+				? el( PluginDocumentSettingPanel, { name: 'wp-scatter-elsewhere-youtube-settings', title: __( 'YouTube', 'wp-scatter-elsewhere' ), className: 'wp-scatter-elsewhere-youtube-panel' }, el( YouTubePanel ) )
+				: null
+		);
+	};
+
 	registerPlugin( 'wp-scatter-elsewhere-youtube', {
 		render: function () {
-			return el(
-				wp.element.Fragment,
-				null,
-				PluginPostPublishPanel
-					? el( PluginPostPublishPanel, { name: 'wp-scatter-elsewhere-youtube-publish', title: __( 'YouTube', 'wp-scatter-elsewhere' ), initialOpen: true }, el( YouTubePanel ) )
-					: null,
-				PluginDocumentSettingPanel
-					? el( PluginDocumentSettingPanel, { name: 'wp-scatter-elsewhere-youtube-settings', title: __( 'YouTube', 'wp-scatter-elsewhere' ), className: 'wp-scatter-elsewhere-youtube-panel' }, el( YouTubePanel ) )
-					: null
-			);
+			return el( Panels );
 		},
 	} );
 }( window.wp ) );

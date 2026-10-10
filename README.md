@@ -39,7 +39,7 @@ private unless changed), and starts the upload with **Publish to YouTube**. It s
 progress, the YouTube link with the privacy chosen at upload time (the **Check on YouTube**
 button reads the real privacy, for about 1 unit of quota), the warnings, and a **Retry** button
 when an upload failed. It
-needs the `manage_options` capability (filter `wp_scatter_elsewhere_capability`). Uploads
+needs the `manage_options` capability (filter `wp_scatter_elsewhere_capability`); the panel is shown for posts and pages only (filter `wp_scatter_elsewhere_post_types` to add other types, such as a custom post type). Uploads
 run in the background with WP-Cron, see below.
 
 ### Videos that are already on YouTube

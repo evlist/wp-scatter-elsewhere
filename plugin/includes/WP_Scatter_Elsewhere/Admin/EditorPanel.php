@@ -30,6 +30,13 @@ class EditorPanel {
 			true
 		);
 
+		// The panels are shown for the content that can hold a video, not for templates and patterns.
+		wp_add_inline_script(
+			self::HANDLE,
+			'window.wpScatterElsewhereEditor = ' . wp_json_encode( [ 'postTypes' => array_values( (array) apply_filters( 'wp_scatter_elsewhere_post_types', [ 'post', 'page' ] ) ) ] ) . ';',
+			'before'
+		);
+
 		wp_set_script_translations(
 			self::HANDLE,
 			'wp-scatter-elsewhere',
